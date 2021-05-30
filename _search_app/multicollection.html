@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+
+    <!-- Include applicable Collection Builder CSS -->
+    <link rel="stylesheet" href="dev_assets/bootstrap.min.css">
+    <link rel="stylesheet" href="dev_assets/custom.css">
+
+    <script type="module" src="src/components/Search.js"></script>
+
+    <style>
+     body {
+       margin-top: 1rem;
+     }
+    </style>
+
+  </head>
+
+  <body>
+
+    <search-app elasticsearch-url="https://cb-elasticsearch.derekenos.com:9200"
+                elasticsearch-index="moscon"
+                fields="title,date,guest_author,guest_artist,program_artists,description,creator,subject,location,type,full_text,"
+                faceted-fields="guest_author,guest_artist,creator,subject,location,type,"
+                display-fields="title,date,guest_artist,program_artists,"
+                search-multi>
+    </search-app>
+
+  </body>
+
+</html>
