@@ -1,3 +1,4 @@
 display_name,stub,dropdown_parent
-Search,/,
+Home,/,
+Search,/search.html,
 About,/about.html,
