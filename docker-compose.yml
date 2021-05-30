@@ -1,0 +1,22 @@
+version: '2.4'
+
+services:
+  default:
+    build: .
+    image: collectionbuilder-elasticsearch-dev
+    volumes:
+      - .aws:/home/ubuntu/.aws
+      - .elasticsearch:/home/ubuntu/.elasticsearch
+      - .:/home/ubuntu/collectionbuilder
+    ports:
+      - 4000:4000
+    depends_on:
+      - elasticsearch
+  elasticsearch:
+    image: elasticsearch:7.7.0
+    environment:
+    - discovery.type=single-node
+    - http.cors.enabled=true
+    - http.cors.allow-origin=*
+    ports:
+      - 9200:9200
