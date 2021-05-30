@@ -11,3 +11,10 @@
 {% for f in feet %}{% include {{ f }} %}
 {% endfor %}
 {%- endif -%}
+{% if page.layout == "search" or page.layout == "multi-collection-search" %}
+  {% if site.elasticsearch-host == "" %}
+    {% include js/lunr-js.html %}
+  {% else %}
+    <script src="/assets/js/search/d46d2072.js"></script>
+  {%- endif -%}
+{% endif %}

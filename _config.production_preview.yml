@@ -1,0 +1,12 @@
+# site domain
+url: http://0.0.0.0:4000
+
+# url to production objects store
+digital-objects: https://collectionbuilder.sfo2.cdn.digitaloceanspaces.com/moscon
+
+# Elasticsearch cluster host
+elasticsearch-protocol: https
+elasticsearch-host: cb-elasticsearch.derekenos.com
+elasticsearch-port: 9200
+
+exclude: [docs/, Rakefile, README.md, LICENSE]
