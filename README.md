@@ -1,3 +1,5 @@
+WIP project doc: https://gist.github.com/derekenos/2244b4d6cb2387add0aeaa3ebb1d8c51
+
 # CollectionBuilder-Elasticsearch
 
 CollectionBuilder-Elasticsearch is a web application generator and toolset for configuring, administering, and searching collection data with Elasticsearch.
