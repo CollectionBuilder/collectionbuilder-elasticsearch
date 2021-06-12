@@ -10,7 +10,7 @@
 # site domain, full URL to the production location of your collection
 url: https://www.lib.uidaho.edu
 # path to location on the domain if necessary e.g. /digital/hjccc
-baseurl: /
+baseurl:
 # location of code, the full url to your github repository
 source-code: https://github.com/CollectionBuilder/collectionbuilder-elasticsearch
 
@@ -18,9 +18,9 @@ source-code: https://github.com/CollectionBuilder/collectionbuilder-elasticsearc
 # SITE SETTINGS
 #
 # title of site appears in banner
-title: CollectionBuilder Elasticsearch
+title: CollectionBuilder-Elasticsearch
 # tagline, a short phrase that will appear throughout the site in the top banner
-tagline: Elasticsearch your CollectionBuilder collections
+tagline: Fast, Cross-Collection Search
 # description appears in meta tags and other locations
 # this description might appear in search result lists, keep around 160 characters max
 description: "CollectionBuilder-Elasticsearch is a web application generator and toolset for configuring, administering, and searching collection data with Elasticsearch."
@@ -60,3 +60,17 @@ exclude: [docs/, Rakefile, README.md, LICENSE]
 # compress CSS output
 sass:
   style: compressed
+
+##########
+# METADATA SETTINGS
+#
+metadata: metadata
+
+##########
+# ELASTICSEARCH SETTINGS
+#
+elasticsearch-protocol: http
+elasticsearch-host: 0.0.0.0
+elasticsearch-port: 9200
+elasticsearch-index: moscon
+elasticsearch-directory-index: directory_
