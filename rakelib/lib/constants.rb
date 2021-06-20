@@ -60,9 +60,10 @@ $ES_MANUAL_SNAPSHOT_NAME_TEMPLATE = CGI.escape "<manual-snapshot-{now/d{yyyyMMdd
 
 $ES_SCHEDULED_SNAPSHOT_NAME_TEMPLATE = "<scheduled-snapshot-{now/d{yyyyMMdd-HHmm}}>"
 
-$S3_URL_REGEX = /^https?:\/\/(?<bucket>[^\.]+)\.(?<region>\w+)(?:\.cdn)?\.digitaloceanspaces\.com(?:\/(?<prefix>.+))?$/
-
 $SEARCH_CONFIG_PATH = File.join(['_data', 'config-search.csv'])
+$COLLECTIONS_CONFIG_PATH = File.join(['_data', 'config-collections.csv'])
+$COLLECTIONS_METADATA_PATH = File.join(['_data', 'collections-metadata.csv'])
+$COLLECTIONS_OBJECTS_METADATA_PATH = File.join(['_data', 'collections-objects-metadata.csv'])
 
 # Define a mapping from environment symbols to Elasticsearch profile names.
 $ENV_ES_PROFILE_MAP = {
@@ -77,11 +78,13 @@ $ES_PROFILE_ENV_MAP = {
   'PRODUCTION' =>  :PRODUCTION,
 }
 
-# Define a mapping from environment symbols to AWS profile names.
-$ENV_AWS_PROFILE_MAP = {
-  :PRODUCTION_PREVIEW => 'default',
-  :PRODUCTION => 'default',
-}
+# Define which fields to extract from a collection website's JSON-LD data
+# for use as metadata.
+$COLLECTION_JSON_LD_METADATA_KEYS = [
+  'headline',
+  'image',
+  'description',
+]
 
 
 ###############################################################################

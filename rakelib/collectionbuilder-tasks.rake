@@ -1,5 +1,11 @@
 
+require 'csv'
 require 'json'
+require 'open-uri'
+
+require 'nokogiri'
+
+require_relative 'lib/constants'
 
 
 # Enclose CollectionBuilder-related tasks in a namespaced called "cb", to be
@@ -129,6 +135,87 @@ namespace :cb do
     output_file.close
 
     puts "Wrote #{num_items} items to: #{output_path}"
+  end
+
+
+  ###############################################################################
+  # retrieve_collections_metadata
+  ###############################################################################
+
+  desc "Read and save metadata from the configured collections websites"
+  task :read_collections_metadata do
+    config = load_config :DEVELOPMENT
+
+    # Collect configured collection URLs.
+    urls = config[:collections_config].map { |x| x['homepage_url'] }
+
+    # Attempt to retrieve the required JSON-LD data from each collection home page.
+    url_metadata_map = Hash.new (Hash.new {})
+    urls.each do |url|
+      puts "\n**** Retrieving metadata from: #{url}"
+      begin
+        res = URI.open url
+      rescue
+        puts 'FAILED - Could not open the URL'
+        next
+      end
+
+      begin
+        doc = Nokogiri.parse res.read
+      rescue
+        puts 'FAILED - Response is not valid HTML'
+        next
+      end
+
+      elements = doc.css('script[type="application/ld+json"]')
+      if elements.length == 0
+        puts 'FAILED - Response does not contain a JSON-LD script tag'
+        next
+      end
+      if elements.length > 1
+        puts 'WARNING - Reading only the first of multiple JSON-LD script tags'
+      end
+      script_tag = elements[0]
+
+      begin
+        data = JSON.parse(script_tag.text)
+      rescue
+        puts "FAILED - JSON-LD script tag contents is not valid JSON"
+        next
+      end
+
+      $COLLECTION_JSON_LD_METADATA_KEYS.each do |k|
+        $stdout.write "#{k} => "
+        if not data.has_key? k
+          puts 'MISSING'
+          next
+        elsif data[k].length == 0
+          puts 'EMPTY'
+          next
+        else
+          value = data[k]
+          url_metadata_map[url][k] = value
+          snippet = value.slice(0, 20)
+          if value.length > 20
+            snippet += '...'
+          end
+          puts "\"#{snippet}\""
+        end
+      end
+    end
+
+    # Write the data to the collections metadata file.
+    CSV.open($COLLECTIONS_METADATA_PATH, 'w') do |writer|
+      writer << ["url"]  + $COLLECTION_JSON_LD_METADATA_KEYS
+      urls.each do |url|
+        metadata = url_metadata_map[url]
+        writer << [
+          url,
+          *($COLLECTION_JSON_LD_METADATA_KEYS.map { |k| metadata[k] or '' })
+        ]
+      end
+    end
+
   end
 
 
