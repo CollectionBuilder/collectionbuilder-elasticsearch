@@ -44,3 +44,9 @@ def prompt_user_for_confirmation message
     puts "Please enter \"y\" or \"n\""
   end
 end
+
+
+# Format a string for inclusion in a filename.
+def filename_escape url
+  return url.downcase.gsub(/[^a-z0-9\-_]/, '_')
+end

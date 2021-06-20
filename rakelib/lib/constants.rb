@@ -63,7 +63,7 @@ $ES_SCHEDULED_SNAPSHOT_NAME_TEMPLATE = "<scheduled-snapshot-{now/d{yyyyMMdd-HHmm
 $SEARCH_CONFIG_PATH = File.join(['_data', 'config-search.csv'])
 $COLLECTIONS_CONFIG_PATH = File.join(['_data', 'config-collections.csv'])
 $COLLECTIONS_METADATA_PATH = File.join(['_data', 'collections-metadata.csv'])
-$COLLECTIONS_OBJECTS_METADATA_PATH = File.join(['_data', 'collections-objects-metadata.csv'])
+$COLLECTIONS_OBJECTS_METADATA_DIR = File.join(['_data', 'collections-objects-metadata'])
 
 # Define a mapping from environment symbols to Elasticsearch profile names.
 $ENV_ES_PROFILE_MAP = {
@@ -85,6 +85,9 @@ $COLLECTION_JSON_LD_METADATA_KEYS = [
   'image',
   'description',
 ]
+
+# Define the CollectionBuilder site path where the JSON metadata file lives.
+$COLLECTIONBUILDER_JSON_METADATA_PATH = '/assets/data/metadata.json'
 
 
 ###############################################################################

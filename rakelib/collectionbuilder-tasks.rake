@@ -139,7 +139,7 @@ namespace :cb do
 
 
   ###############################################################################
-  # retrieve_collections_metadata
+  # read_collections_metadata
   ###############################################################################
 
   desc "Read and save metadata from the configured collections websites"
@@ -216,6 +216,51 @@ namespace :cb do
       end
     end
 
+  end
+
+
+  ###############################################################################
+  # download_collections_objects_metadata
+  ###############################################################################
+
+  desc "Download the object metadata files for each collection"
+  task :download_collections_objects_metadata do
+    config = load_config :DEVELOPMENT
+
+    # Collect configured collection URLs.
+    collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
+
+    # Create the objects metadata directory if necessary.
+    $ensure_dir_exists.call $COLLECTIONS_OBJECTS_METADATA_DIR
+
+    collection_urls.each do |collection_url|
+      url = collection_url.delete_suffix('/') + '/' \
+            + $COLLECTIONBUILDER_JSON_METADATA_PATH.delete_prefix('/')
+      puts "\n**** Downloading objects metadata from: #{url}"
+      begin
+        res = URI.open url
+      rescue
+        puts 'FAILED - Could not open the URL'
+        next
+      end
+
+      # Parse the response as JSON to check that it's valid.
+      data = res.read
+      begin
+        JSON.parse data
+      rescue
+        puts "FAILED - Response is not valid JSON"
+        next
+      end
+
+      filename = "#{filename_escape(collection_url)}-metadata.json"
+      output_path = File.join([$COLLECTIONS_OBJECTS_METADATA_DIR, filename])
+
+      File.open(output_path, 'w') do |f|
+        num_bytes = f.write(data)
+        puts "Wrote #{num_bytes} bytes to: #{output_path}"
+      end
+    end
   end
 
 
