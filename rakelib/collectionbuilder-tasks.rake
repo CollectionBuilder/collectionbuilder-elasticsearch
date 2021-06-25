@@ -40,6 +40,127 @@ namespace :cb do
 
 
   ###############################################################################
+  # read_collections_metadata
+  ###############################################################################
+
+  desc "Read and save metadata from the configured collections websites"
+  task :read_collections_metadata do
+    config = load_config :DEVELOPMENT
+
+    # Collect configured collection URLs.
+    urls = config[:collections_config].map { |x| x['homepage_url'] }
+
+    # Attempt to retrieve the required JSON-LD data from each collection home page.
+    url_metadata_map = Hash.new (Hash.new {})
+    urls.each do |url|
+      puts "\n**** Retrieving metadata from: #{url}"
+      begin
+        res = URI.open url
+      rescue
+        puts 'FAILED - Could not open the URL'
+        next
+      end
+
+      begin
+        doc = Nokogiri.parse res.read
+      rescue
+        puts 'FAILED - Response is not valid HTML'
+        next
+      end
+
+      elements = doc.css('script[type="application/ld+json"]')
+      if elements.length == 0
+        puts 'FAILED - Response does not contain a JSON-LD script tag'
+        next
+      end
+      if elements.length > 1
+        puts 'WARNING - Reading only the first of multiple JSON-LD script tags'
+      end
+      script_tag = elements[0]
+
+      begin
+        data = JSON.parse(script_tag.text)
+      rescue
+        puts "FAILED - JSON-LD script tag contents is not valid JSON"
+        next
+      end
+
+      collection_metadata = {}
+      $COLLECTION_JSON_LD_METADATA_KEYS.each do |k|
+        $stdout.write "#{k} => "
+        if not data.has_key? k
+          puts 'MISSING'
+          next
+        elsif data[k].length == 0
+          puts 'EMPTY'
+          next
+        else
+          value = data[k]
+          collection_metadata[k] = value
+          snippet = value.slice(0, 20)
+          if value.length > 20
+            snippet += '...'
+          end
+          puts "\"#{snippet}\""
+        end
+      end
+
+      # Write the data to the collections metadata file.
+      if collection_metadata.length == 0
+        next
+      end
+      collection_data_dir = get_ensure_collection_data_dir(url)
+      output_path = File.join([collection_data_dir, 'collection-metadata.json'])
+      File.open(output_path, 'w') do |fh|
+        fh.write(JSON.dump collection_metadata)
+      end
+      puts "Wrote: #{output_path}"
+    end
+  end
+
+
+  ###############################################################################
+  # download_collections_objects_metadata
+  ###############################################################################
+
+  desc "Download the object metadata files for each collection"
+  task :download_collections_objects_metadata do
+    config = load_config :DEVELOPMENT
+
+    # Collect configured collection URLs.
+    collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
+
+    collection_urls.each do |collection_url|
+      url = collection_url.delete_suffix('/') + '/' \
+            + $COLLECTIONBUILDER_JSON_METADATA_PATH.delete_prefix('/')
+      puts "\n**** Downloading objects metadata from: #{url}"
+      begin
+        res = URI.open url
+      rescue
+        puts 'FAILED - Could not open the URL'
+        next
+      end
+
+      # Parse the response as JSON to check that it's valid.
+      data = res.read
+      begin
+        JSON.parse data
+      rescue
+        puts "FAILED - Response is not valid JSON"
+        next
+      end
+
+      collection_data_dir = get_ensure_collection_data_dir(collection_url)
+      output_path = File.join([collection_data_dir, "objects-metadata.json"])
+      File.open(output_path, 'w') do |f|
+        num_bytes = f.write(data)
+        puts "Wrote #{num_bytes} bytes to: #{output_path}"
+      end
+    end
+  end
+
+
+  ###############################################################################
   # extract_pdf_text
   ###############################################################################
 
@@ -135,132 +256,6 @@ namespace :cb do
     output_file.close
 
     puts "Wrote #{num_items} items to: #{output_path}"
-  end
-
-
-  ###############################################################################
-  # read_collections_metadata
-  ###############################################################################
-
-  desc "Read and save metadata from the configured collections websites"
-  task :read_collections_metadata do
-    config = load_config :DEVELOPMENT
-
-    # Collect configured collection URLs.
-    urls = config[:collections_config].map { |x| x['homepage_url'] }
-
-    # Attempt to retrieve the required JSON-LD data from each collection home page.
-    url_metadata_map = Hash.new (Hash.new {})
-    urls.each do |url|
-      puts "\n**** Retrieving metadata from: #{url}"
-      begin
-        res = URI.open url
-      rescue
-        puts 'FAILED - Could not open the URL'
-        next
-      end
-
-      begin
-        doc = Nokogiri.parse res.read
-      rescue
-        puts 'FAILED - Response is not valid HTML'
-        next
-      end
-
-      elements = doc.css('script[type="application/ld+json"]')
-      if elements.length == 0
-        puts 'FAILED - Response does not contain a JSON-LD script tag'
-        next
-      end
-      if elements.length > 1
-        puts 'WARNING - Reading only the first of multiple JSON-LD script tags'
-      end
-      script_tag = elements[0]
-
-      begin
-        data = JSON.parse(script_tag.text)
-      rescue
-        puts "FAILED - JSON-LD script tag contents is not valid JSON"
-        next
-      end
-
-      $COLLECTION_JSON_LD_METADATA_KEYS.each do |k|
-        $stdout.write "#{k} => "
-        if not data.has_key? k
-          puts 'MISSING'
-          next
-        elsif data[k].length == 0
-          puts 'EMPTY'
-          next
-        else
-          value = data[k]
-          url_metadata_map[url][k] = value
-          snippet = value.slice(0, 20)
-          if value.length > 20
-            snippet += '...'
-          end
-          puts "\"#{snippet}\""
-        end
-      end
-    end
-
-    # Write the data to the collections metadata file.
-    CSV.open($COLLECTIONS_METADATA_PATH, 'w') do |writer|
-      writer << ["url"]  + $COLLECTION_JSON_LD_METADATA_KEYS
-      urls.each do |url|
-        metadata = url_metadata_map[url]
-        writer << [
-          url,
-          *($COLLECTION_JSON_LD_METADATA_KEYS.map { |k| metadata[k] or '' })
-        ]
-      end
-    end
-
-  end
-
-
-  ###############################################################################
-  # download_collections_objects_metadata
-  ###############################################################################
-
-  desc "Download the object metadata files for each collection"
-  task :download_collections_objects_metadata do
-    config = load_config :DEVELOPMENT
-
-    # Collect configured collection URLs.
-    collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
-
-    # Create the objects metadata directory if necessary.
-    $ensure_dir_exists.call $COLLECTIONS_OBJECTS_METADATA_DIR
-
-    collection_urls.each do |collection_url|
-      url = collection_url.delete_suffix('/') + '/' \
-            + $COLLECTIONBUILDER_JSON_METADATA_PATH.delete_prefix('/')
-      puts "\n**** Downloading objects metadata from: #{url}"
-      begin
-        res = URI.open url
-      rescue
-        puts 'FAILED - Could not open the URL'
-        next
-      end
-
-      # Parse the response as JSON to check that it's valid.
-      data = res.read
-      begin
-        JSON.parse data
-      rescue
-        puts "FAILED - Response is not valid JSON"
-        next
-      end
-
-      filename = "#{filename_escape(collection_url)}-metadata.json"
-      output_path = File.join([$COLLECTIONS_OBJECTS_METADATA_DIR, filename])
-
-      File.open(output_path, 'w') do |f|
-        num_bytes = f.write(data)
-        puts "Wrote #{num_bytes} bytes to: #{output_path}"
-      end
-    end
   end
 
 

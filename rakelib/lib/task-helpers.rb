@@ -1,4 +1,6 @@
 
+require_relative './constants'
+
 # If a specified directory doesn't exist, create it.
 $ensure_dir_exists = ->(dir) { if !Dir.exists?(dir) then Dir.mkdir(dir) end }
 
@@ -49,4 +51,13 @@ end
 # Format a string for inclusion in a filename.
 def filename_escape url
   return url.downcase.gsub(/[^a-z0-9\-_]/, '_')
+end
+
+
+def get_ensure_collection_data_dir collection_url
+  $ensure_dir_exists.call $COLLECTIONS_DATA_DIR
+  escaped_collection_name = filename_escape collection_url
+  collection_data_dir = File.join [$COLLECTIONS_DATA_DIR, "#{escaped_collection_name}"]
+  $ensure_dir_exists.call collection_data_dir
+  return collection_data_dir
 end
