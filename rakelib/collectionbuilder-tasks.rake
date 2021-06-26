@@ -52,7 +52,7 @@ namespace :cb do
     urls = config[:collections_config].map { |x| x['homepage_url'] }
 
     # Attempt to retrieve the required JSON-LD data from each collection home page.
-    url_metadata_map = Hash.new (Hash.new {})
+    url_metadata_map = Hash.new { |h,k| h[k] = {} }
     urls.each do |url|
       announce "Retrieving metadata from: #{url}"
       begin
@@ -111,7 +111,7 @@ namespace :cb do
         next
       end
       collection_data_dir = get_ensure_collection_data_dir(url)
-      output_path = File.join([collection_data_dir, 'collection-metadata.json'])
+      output_path = File.join([collection_data_dir, $COLLECTION_METADATA_FILENAME])
       File.open(output_path, 'w') do |fh|
         fh.write(JSON.dump collection_metadata)
       end
@@ -152,7 +152,9 @@ namespace :cb do
       end
 
       collection_data_dir = get_ensure_collection_data_dir(collection_url)
-      output_path = File.join([collection_data_dir, "objects-metadata.json"])
+      output_path = File.join(
+        [collection_data_dir, $COLLECTION_OBJECTS_METADATA_FILENAME]
+      )
       File.open(output_path, 'w') do |f|
         num_bytes = f.write(data)
         puts "Wrote #{num_bytes} bytes to: #{output_path}"
@@ -175,7 +177,7 @@ namespace :cb do
     collection_urls.each do |collection_url|
       collection_data_dir = get_ensure_collection_data_dir(collection_url)
       collection_objects_metadata_path = File.join(
-        [ collection_data_dir, "objects-metadata.json"]
+        [ collection_data_dir, $COLLECTION_OBJECTS_METADATA_FILENAME]
       )
       objects_metadata = JSON.load File.open(collection_objects_metadata_path, 'rb')
       pdf_objects_metadata = objects_metadata['objects'].select do |object_metadata|
@@ -248,6 +250,99 @@ namespace :cb do
     end
   end
 
+
+  ###############################################################################
+  # generate_search_config
+  ###############################################################################
+
+  desc "Create an initial search config from the superset of all object fields"
+  task :generate_search_config do
+    config = load_config :DEVELOPMENT
+
+    # Collect configured collection URLs.
+    collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
+
+    # Define map that will be used to generate the search config file.
+    # Each config hash will have the keys: display, facet, multi-valued.
+    collection_url_field_config_map = {}
+
+    collection_urls.each do |collection_url|
+      announce "Analyzing object metadata for collection: #{collection_url}"
+      collection_data_dir = get_ensure_collection_data_dir(collection_url)
+      collection_objects_metadata_path = File.join(
+        [ collection_data_dir, $COLLECTION_OBJECTS_METADATA_FILENAME ]
+      )
+      objects_metadata = JSON.load File.open(collection_objects_metadata_path, 'rb')
+
+      field_config_map = collection_url_field_config_map[collection_url] = {}
+
+      # Collect the set of unique values for each non-excluded field.
+      field_uniq_values_map = Hash.new { |h,k| h[k] = Set[] }
+      excluded_fields = Set[]
+      objects_metadata['objects'].each do |object_metadata|
+        object_metadata.each do |field,value|
+          if $SEARCH_CONFIG_EXCLUDED_FIELDS.include? field
+            excluded_fields.add(field)
+            next
+          end
+          # Strip the value and add it to the uniq values set for this field.
+          field_uniq_values_map[field].add value.strip
+        end
+      end
+      if excluded_fields
+        puts "Excluded the following field(s) per the SEARCH_CONFIG_EXCLUDED_FIELDS "\
+             "setting:"
+        puts excluded_fields.sort().map { |x| "  #{x}" }.join("\n")
+      end
+
+      # Process the collected field values to determine which should be included in
+      # the search config and with what characteristics.
+      num_objects = objects_metadata['objects'].length
+      field_uniq_values_map.each do |field,values|
+        # Ignore fields with no, non-empty values.
+        if values.empty? or values.length == 1 and values.first == ''
+          puts "Ignoring field (#{field}) for which no object specifies a value."
+          next
+        end
+        # Consider the field to be facet-able if the number of unique values is less
+        # than 100 and the cardinality / total-num-objects ratio is less than 0.5
+        facet = values.length < 100 and values.length < num_objects * 0.5
+        # Take the presence of a semicolon in at least 5% of the values to indicate
+        # that the field is multi-valued.
+        num_values_with_semi = values.map { |x| x.include?(';') ? 1 : 0 }.sum
+        is_multi_valued = num_values_with_semi >= values.length * 0.05
+        field_config_map[field] = {
+          'display' => $SEARCH_CONFIG_DEFAULT_DISPLAY_FIELDS.include?(field),
+          'facet' => facet,
+          'multi-valued' => is_multi_valued,
+        }
+      end
+    end
+
+    # Combine the collection-specific search configs into a single config.
+    search_config = {}
+    collection_url_field_config_map.each do |collection_url,field_config_map|
+      field_config_map.each do |field,field_config|
+        if not search_config.include? field
+          search_config[field] = field_config
+        next
+        end
+        search_config[field]['facet'] &= field_config['facet']
+        search_config[field]['multi-valued'] |= field_config['multi-valued']
+      end
+    end
+
+    # Write out the search config file.
+    CSV.open($SEARCH_CONFIG_PATH, 'w') do |writer|
+      writer << [ 'field', 'display', 'facet', 'multi-valued' ]
+      # TODO - probably sort this output in some desired display order.
+      search_config.each do |k,config|
+        writer << [ k, config['display'], config['facet'], config['multi-valued'] ]
+      end
+    end
+    announce 'Done'
+    puts "Wrote #{search_config.length} fields to: #{$SEARCH_CONFIG_PATH}"
+  end
 
   ###############################################################################
   # generate_search_index_data
