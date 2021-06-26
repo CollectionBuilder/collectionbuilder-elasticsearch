@@ -1,6 +1,7 @@
 
 require 'csv'
 require 'json'
+require 'open3'
 require 'open-uri'
 
 require 'nokogiri'
@@ -213,21 +214,38 @@ namespace :cb do
 
   desc "Extract the text from PDF collection objects"
   task :extract_pdf_text do
-
     config = load_config :DEVELOPMENT
-    output_dir = config[:extracted_pdf_text_dir]
-    $ensure_dir_exists.call output_dir
 
-    # Extract the text.
-    num_items = 0
-    Dir.glob(File.join([config[:objects_dir], "*.pdf"])).each do |filename|
-      output_filename = File.join(
-        [output_dir, "#{File.basename(filename, File.extname(filename))}.txt"]
-      )
-      system("pdftotext -enc UTF-8 -eol unix -nopgbrk #{filename} #{output_filename}")
-      num_items += 1
+    # Collect configured collection URLs.
+    collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
+
+    collection_urls.each do |collection_url|
+      input_dir = get_ensure_collection_pdfs_dir(collection_url)
+      output_dir = get_ensure_collection_extracted_pdf_text_dir(collection_url)
+
+      num_items = 0
+      input_paths = Dir.glob(File.join([input_dir, '*']))
+
+      if input_paths.length == 0
+        announce "#{input_dir} contains no PDFs - skipping"
+        next
+      end
+
+      announce "Extracting text from PDFs in: #{input_dir}"
+      input_paths.each do |input_path|
+        $stdout.write "\nExtracting text from: #{input_path} - "
+        output_path = File.join([output_dir, "#{File.basename(input_path)}.txt"])
+        stdout_stderr, status = Open3.capture2e(
+          "pdftotext -enc UTF-8 -eol unix -nopgbrk #{input_path} #{output_path}"
+        )
+        if status.success?
+          puts 'DONE'
+          puts "Wrote: #{output_path}"
+        else
+          puts "ERROR\n#{stdout_stderr}"
+        end
+      end
     end
-    puts "Extracted text from #{num_items} PDFs into: #{output_dir}"
   end
 
 

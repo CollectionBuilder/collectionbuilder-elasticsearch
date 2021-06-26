@@ -74,3 +74,12 @@ def get_ensure_collection_pdfs_dir collection_url
   $ensure_dir_exists.call collection_pdfs_dir
   return collection_pdfs_dir
 end
+
+def get_ensure_collection_extracted_pdf_text_dir collection_url
+  collection_data_dir = get_ensure_collection_data_dir(collection_url)
+  collection_extracted_pdf_text_dir = File.join(
+    [collection_data_dir, $COLLECTION_EXTRACTED_PDF_TEXT_SUBDIR]
+  )
+  $ensure_dir_exists.call collection_extracted_pdf_text_dir
+  return collection_extracted_pdf_text_dir
+end

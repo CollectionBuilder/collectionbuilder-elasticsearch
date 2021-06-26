@@ -64,6 +64,7 @@ $SEARCH_CONFIG_PATH = File.join(['_data', 'config-search.csv'])
 $COLLECTIONS_CONFIG_PATH = File.join(['_data', 'config-collections.csv'])
 $COLLECTIONS_DATA_DIR = File.join(['_data', 'collections'])
 $COLLECTION_PDFS_SUBDIR = 'pdfs'
+$COLLECTION_EXTRACTED_PDF_TEXT_SUBDIR = 'extracted_pdfs_text'
 
 
 # Define a mapping from environment symbols to Elasticsearch profile names.
