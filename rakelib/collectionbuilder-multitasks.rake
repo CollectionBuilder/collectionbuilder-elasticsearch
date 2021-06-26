@@ -1,11 +1,7 @@
 
 # This file defines tasks that execute sequences of individual task operations.
 
-
-# Define a helper to announce the next task step.
-def _announce_step step
-  puts "\n**** #{step}"
-end
+require_relative 'lib/task-helpers'
 
 
 # Enclose CollectionBuilder-related tasks in a namespaced called "cb", to be
@@ -27,13 +23,13 @@ namespace :cb do
 
     profile = $ENV_ES_PROFILE_MAP[env]
 
-    _announce_step 'Extract the text from PDF-type collection objects'
+    announce 'Extract the text from PDF-type collection objects'
     Rake::Task['cb:extract_pdf_text'].invoke
 
-    _announce_step 'Generate the collection search index data file'
+    announce 'Generate the collection search index data file'
     Rake::Task['cb:generate_search_index_data'].invoke profile
 
-    _announce_step 'Generate the collection search index settings file'
+    announce 'Generate the collection search index settings file'
     Rake::Task['cb:generate_search_index_settings'].invoke
 
     # Check that the Elasticsearch instance is available and accessible.
@@ -44,18 +40,18 @@ namespace :cb do
 
     # Create the directory index before the collection index so that the call
     # to create_index will automatically update the directory.
-    _announce_step 'Create the directory index'
+    announce 'Create the directory index'
     Rake::Task['es:create_directory_index'].invoke profile
 
-    _announce_step 'Create the collection search index'
+    announce 'Create the collection search index'
     Rake::Task['es:create_index'].invoke profile
 
-    _announce_step 'Load the collection data file into the search index'
+    announce 'Load the collection data file into the search index'
     Rake::Task['es:load_bulk_data'].invoke profile
 
     # TODO - maybe also enable daily snapshots
 
-    _announce_step 'Search index is loaded and ready!'
+    announce 'Search index is loaded and ready!'
     # Generate sample index document and directory index URLs.
     config = $get_config_for_es_profile.call profile
     proto = config[:elasticsearch_protocol]

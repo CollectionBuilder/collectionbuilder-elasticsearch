@@ -53,7 +53,7 @@ namespace :cb do
     # Attempt to retrieve the required JSON-LD data from each collection home page.
     url_metadata_map = Hash.new (Hash.new {})
     urls.each do |url|
-      puts "\n**** Retrieving metadata from: #{url}"
+      announce "Retrieving metadata from: #{url}"
       begin
         res = URI.open url
       rescue
@@ -133,7 +133,7 @@ namespace :cb do
     collection_urls.each do |collection_url|
       url = collection_url.delete_suffix('/') + '/' \
             + $COLLECTIONBUILDER_JSON_METADATA_PATH.delete_prefix('/')
-      puts "\n**** Downloading objects metadata from: #{url}"
+      announce "Downloading objects metadata from: #{url}"
       begin
         res = URI.open url
       rescue
@@ -155,6 +155,53 @@ namespace :cb do
       File.open(output_path, 'w') do |f|
         num_bytes = f.write(data)
         puts "Wrote #{num_bytes} bytes to: #{output_path}"
+      end
+    end
+  end
+
+
+  ###############################################################################
+  # download_collections_pdfs
+  ###############################################################################
+
+  desc "Download collections PDFs for text extraction"
+  task :download_collections_pdfs do
+    config = load_config :DEVELOPMENT
+
+    # Collect configured collection URLs.
+    collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
+
+    collection_urls.each do |collection_url|
+      collection_data_dir = get_ensure_collection_data_dir(collection_url)
+      collection_objects_metadata_path = File.join(
+        [ collection_data_dir, "objects-metadata.json"]
+      )
+      objects_metadata = JSON.load File.open(collection_objects_metadata_path, 'rb')
+      pdf_objects_metadata = objects_metadata['objects'].select do |object_metadata|
+        object_metadata['format'] == $APPLICATION_PDF
+      end
+
+      if pdf_objects_metadata.length == 0
+        announce "#{collection_objects_metadata_path} contains no PDFs - skipping"
+        next
+      end
+
+      announce "Downloading objects from: #{collection_url}"
+      pdfs_dir = get_ensure_collection_pdfs_dir(collection_url)
+      pdf_objects_metadata.each do |pdf_object_metadata|
+        url = pdf_object_metadata['object_download']
+        $stdout.write "Downloading: #{url} - "
+        begin
+          res = URI.open url
+        rescue
+          puts 'FAILED - Could not open the URL'
+          next
+        end
+        output_path = File.join([pdfs_dir, filename_escape(url)])
+        File.open(output_path, 'wb') do |f|
+          f.write(res.read)
+        end
+        puts 'DONE'
       end
     end
   end

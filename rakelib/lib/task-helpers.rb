@@ -54,10 +54,23 @@ def filename_escape url
 end
 
 
+# Format and print a message as an announcement.
+def announce msg
+  puts "\n**** #{msg}"
+end
+
+
 def get_ensure_collection_data_dir collection_url
   $ensure_dir_exists.call $COLLECTIONS_DATA_DIR
   escaped_collection_name = filename_escape collection_url
   collection_data_dir = File.join [$COLLECTIONS_DATA_DIR, "#{escaped_collection_name}"]
   $ensure_dir_exists.call collection_data_dir
   return collection_data_dir
+end
+
+def get_ensure_collection_pdfs_dir collection_url
+  collection_data_dir = get_ensure_collection_data_dir(collection_url)
+  collection_pdfs_dir = File.join([collection_data_dir, $COLLECTION_PDFS_SUBDIR])
+  $ensure_dir_exists.call collection_pdfs_dir
+  return collection_pdfs_dir
 end

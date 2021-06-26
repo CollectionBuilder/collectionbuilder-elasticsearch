@@ -63,6 +63,8 @@ $ES_SCHEDULED_SNAPSHOT_NAME_TEMPLATE = "<scheduled-snapshot-{now/d{yyyyMMdd-HHmm
 $SEARCH_CONFIG_PATH = File.join(['_data', 'config-search.csv'])
 $COLLECTIONS_CONFIG_PATH = File.join(['_data', 'config-collections.csv'])
 $COLLECTIONS_DATA_DIR = File.join(['_data', 'collections'])
+$COLLECTION_PDFS_SUBDIR = 'pdfs'
+
 
 # Define a mapping from environment symbols to Elasticsearch profile names.
 $ENV_ES_PROFILE_MAP = {
