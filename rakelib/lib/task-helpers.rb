@@ -59,6 +59,11 @@ def announce msg
   puts "\n**** #{msg}"
 end
 
+# Convert a collection URL to an Elasticseatch index name using filename_escape
+# but with <scheme>:// and any trailing / removed.
+def collection_url_to_elasticsearch_index collection_url
+  return filename_escape(collection_url.split('://', 2)[1].delete_suffix('/'))
+end
 
 def get_ensure_collection_data_dir collection_url
   $ensure_dir_exists.call $COLLECTIONS_DATA_DIR
@@ -66,6 +71,42 @@ def get_ensure_collection_data_dir collection_url
   collection_data_dir = File.join [$COLLECTIONS_DATA_DIR, "#{escaped_collection_name}"]
   $ensure_dir_exists.call collection_data_dir
   return collection_data_dir
+end
+
+def get_collection_metadata_path collection_url
+  data_dir = get_ensure_collection_data_dir collection_url
+  return File.join([ data_dir, $COLLECTION_METADATA_FILENAME ])
+end
+
+def read_collection_metadata collection_url
+  metadata_path = get_collection_metadata_path collection_url
+  begin
+    return JSON.load File.open(metadata_path, 'rb')
+  rescue Errno::ENOENT
+    puts "ERROR: Collection metadata file (#{metadata_path}) not found for collection: "\
+         "#{collection_url}"
+    puts "Try running 'rake cb:read_collections_metadata' to automatically generate "\
+         "this file."
+    exit 1
+  end
+end
+
+def get_collection_objects_metadata_path collection_url
+  data_dir = get_ensure_collection_data_dir collection_url
+  return File.join([ data_dir, $COLLECTION_OBJECTS_METADATA_FILENAME ])
+end
+
+def read_collection_objects_metadata collection_url
+  objects_metadata_path = get_collection_objects_metadata_path collection_url
+  begin
+    return JSON.load(File.open(objects_metadata_path, 'rb'))['objects']
+  rescue Errno::ENOENT
+    puts "ERROR: Collection objects metadata file (#{objects_metadata_path}) not found "\
+         "for collection: #{collection_url}"
+    puts "Try running 'rake cb:download_collections_objects_metadata' to automatically "\
+         "retrieve this file."
+    exit 1
+  end
 end
 
 def get_ensure_collection_pdfs_dir collection_url
@@ -82,4 +123,13 @@ def get_ensure_collection_extracted_pdf_text_dir collection_url
   )
   $ensure_dir_exists.call collection_extracted_pdf_text_dir
   return collection_extracted_pdf_text_dir
+end
+
+def get_ensure_collection_elasticsearch_dir collection_url
+  collection_data_dir = get_ensure_collection_data_dir(collection_url)
+  collection_elasticsearch_dir = File.join(
+    [collection_data_dir, $COLLECTION_ELASTICSEARCH_SUBDIR]
+  )
+  $ensure_dir_exists.call collection_elasticsearch_dir
+  return collection_elasticsearch_dir
 end

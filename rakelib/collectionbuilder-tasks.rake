@@ -1,5 +1,6 @@
 
 require 'csv'
+require 'digest'
 require 'json'
 require 'open3'
 require 'open-uri'
@@ -69,49 +70,42 @@ namespace :cb do
         next
       end
 
+      data = {}
       elements = doc.css('script[type="application/ld+json"]')
       if elements.length == 0
         puts 'FAILED - Response does not contain a JSON-LD script tag'
-        next
-      end
-      if elements.length > 1
-        puts 'WARNING - Reading only the first of multiple JSON-LD script tags'
-      end
-      script_tag = elements[0]
-
-      begin
-        data = JSON.parse(script_tag.text)
-      rescue
-        puts "FAILED - JSON-LD script tag contents is not valid JSON"
-        next
+      else
+        if elements.length > 1
+          puts 'WARNING - Reading only the first of multiple JSON-LD script tags'
+        end
+        script_tag = elements[0]
+        begin
+          data = JSON.parse(script_tag.text)
+        rescue
+          puts "FAILED - JSON-LD script tag contents is not valid JSON"
+        end
       end
 
       collection_metadata = {}
       $COLLECTION_JSON_LD_METADATA_KEYS.each do |k|
         $stdout.write "#{k} => "
-        if not data.has_key? k
-          puts 'MISSING'
-          next
-        elsif data[k].length == 0
-          puts 'EMPTY'
-          next
-        else
+        if data.has_key? k and data[k].length > 0
           value = data[k]
-          collection_metadata[k] = value
           snippet = value.slice(0, 20)
           if value.length > 20
             snippet += '...'
           end
           puts "\"#{snippet}\""
+        else
+          puts "~ UNSPECIFIED ~"
+          $stdout.write "  Please enter a value for '#{k}': "
+          value = STDIN.gets.chomp.downcase
         end
+        collection_metadata[k] = value
       end
 
-      # Write the data to the collections metadata file.
-      if collection_metadata.length == 0
-        next
-      end
       collection_data_dir = get_ensure_collection_data_dir(url)
-      output_path = File.join([collection_data_dir, $COLLECTION_METADATA_FILENAME])
+      output_path = get_collection_metadata_path url
       File.open(output_path, 'w') do |fh|
         fh.write(JSON.dump collection_metadata)
       end
@@ -189,7 +183,7 @@ namespace :cb do
         next
       end
 
-      announce "Downloading objects from: #{collection_url}"
+      announce "Downloading PDFs from: #{collection_url}"
       pdfs_dir = get_ensure_collection_pdfs_dir(collection_url)
       pdf_objects_metadata.each do |pdf_object_metadata|
         url = pdf_object_metadata['object_download']
@@ -268,11 +262,7 @@ namespace :cb do
 
     collection_urls.each do |collection_url|
       announce "Analyzing object metadata for collection: #{collection_url}"
-      collection_data_dir = get_ensure_collection_data_dir(collection_url)
-      collection_objects_metadata_path = File.join(
-        [ collection_data_dir, $COLLECTION_OBJECTS_METADATA_FILENAME ]
-      )
-      objects_metadata = JSON.load File.open(collection_objects_metadata_path, 'rb')
+      objects_metadata = read_collection_objects_metadata collection_url
 
       field_config_map = collection_url_field_config_map[collection_url] = {}
 
@@ -345,35 +335,41 @@ namespace :cb do
   end
 
   ###############################################################################
-  # generate_search_index_data
+  # generate_collection_search_index_data
   ###############################################################################
 
-  desc "Generate the file that we'll use to populate the Elasticsearch index via the Bulk API"
-  task :generate_search_index_data, [:env] do |t, args|
+  desc "Generate the file that we'll use to populate the Elasticsearch index via "\
+       "the Bulk API"
+  task :generate_collection_search_index_data, [:env, :collection_url] do |t, args|
     args.with_defaults(
       :env => "DEVELOPMENT"
     )
     assert_env_arg_is_valid args.env
     env = args.env.to_sym
+    collection_url = args.collection_url
 
     config = load_config env
 
-    # Get the development config for local directory info.
-    dev_config = load_config :DEVELOPMENT
-
     # Create a search config <fieldName> => <configDict> map.
     field_config_map = {}
-    dev_config[:search_config].each do |row|
+    CSV.open($SEARCH_CONFIG_PATH, 'r').read do |row|
+      puts row
       field_config_map[row['field']] = row
     end
 
-    output_dir = dev_config[:elasticsearch_dir]
-    $ensure_dir_exists.call output_dir
+    # Get collection-specific metadata and directories.
+    collection_metadata = read_collection_metadata collection_url
+    objects_metadata = read_collection_objects_metadata collection_url
+    extracted_text_dir = get_ensure_collection_extracted_pdf_text_dir collection_url
+    output_dir = get_ensure_collection_elasticsearch_dir(collection_url)
+
     output_path = File.join([output_dir, $ES_BULK_DATA_FILENAME])
     output_file = File.open(output_path, mode: "w")
-    index_name = dev_config[:elasticsearch_index]
+    index_name = collection_url_to_elasticsearch_index collection_url
+
     num_items = 0
-    dev_config[:metadata].each do |item|
+    # Iterate through the object metadatas.
+    objects_metadata.each do |item|
       # Remove any fields with an empty value.
       item.delete_if { |k, v| v.nil? }
 
@@ -384,28 +380,28 @@ namespace :cb do
         end
       end
 
-      item['url'] = "#{config[:collection_url]}/items/#{item['objectid']}.html"
-      item['collectionUrl'] = config[:collection_url]
-      item['collectionTitle'] = config[:collection_title]
+      item['url'] = item['reference_url']
+      item['collectionUrl'] = collection_url
+      item['collectionTitle'] = collection_metadata[$COLLECTION_METADATA_TITLE_KEY]
+      item['thumbnailContentUrl'] = item['object_thumb'] or item['image_thumb']
 
-      # Add the thumbnail image URL.
-      if env == :DEVELOPMENT
-        item['thumbnailContentUrl'] = "#{File.join(config[:thumb_images_dir], item['objectid'])}_th.jpg"
-      else
-        item['thumbnailContentUrl'] = "#{config[:remote_thumb_images_url]}/#{item['objectid']}_th.jpg"
-      end
-
-      # If a extracted text file exists for the item, add the content of that file to the item
-      # as the "full_text" property.
-      item_text_path = File.join([dev_config[:extracted_pdf_text_dir], "#{item['objectid']}.txt"])
+      # If a extracted text file exists for the item, add the content of that file to
+      # the item as the "full_text" property.
+      item_text_path = File.join(
+        [ extracted_text_dir, "#{filename_escape item['object_download']}.txt" ]
+      )
       if File::exists? item_text_path
         full_text = File.read(item_text_path, mode: "r", encoding: "utf-8")
         item['full_text'] = full_text
       end
 
+      # Use the MD5 of the reference_url as the document ID.
+      doc_id = Digest::MD5.hexdigest item['reference_url']
+
       # Write the action_and_meta_data line.
-      doc_id = item['objectid']
-      output_file.write("{\"index\": {\"_index\": \"#{index_name}\", \"_id\": \"#{doc_id}\"}}\n")
+      output_file.write(
+        "{\"index\": {\"_index\": \"#{index_name}\", \"_id\": \"#{doc_id}\"}}\n"
+      )
 
       # Write the source line.
       output_file.write("#{JSON.dump(item.to_hash)}\n")
@@ -416,6 +412,31 @@ namespace :cb do
     output_file.close
 
     puts "Wrote #{num_items} items to: #{output_path}"
+  end
+
+
+  ###############################################################################
+  # generate_collections_search_index_data
+  ###############################################################################
+
+  desc "Generate the file that we'll use to populate the Elasticsearch index via "\
+       "the Bulk API for all configured collections"
+  task :generate_collections_search_index_data, [:env] do |t, args|
+    args.with_defaults(
+      :env => "DEVELOPMENT"
+    )
+    assert_env_arg_is_valid args.env
+
+    config = load_config args.env.to_sym
+
+    # Collect configured collection URLs.
+    collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
+
+    collection_urls.each do |collection_url|
+      Rake::Task['cb:generate_collection_search_index_data'].execute(
+        Rake::TaskArguments.new([:env, :collection_url], [args.env, collection_url])
+      )
+    end
   end
 
 

@@ -15,7 +15,7 @@ $ENV_CONFIG_FILENAMES_MAP = {
   :PRODUCTION => [ '_config.yml', '_config.production.yml' ],
 }
 
-$ES_BULK_DATA_FILENAME = 'es_bulk_data.jsonl'
+$ES_BULK_DATA_FILENAME = 'bulk_data.jsonl'
 
 $ES_CREDENTIALS_PATH = File.join [Dir.home, ".elasticsearch", "credentials"]
 
@@ -52,7 +52,7 @@ $ES_DIRECTORY_INDEX_SETTINGS = {
   }
 }
 
-$ES_INDEX_SETTINGS_FILENAME = 'es_index_settings.json'
+$ES_INDEX_SETTINGS_FILENAME = 'index_settings.json'
 
 # Define an Elasticsearch snapshot name template that will automatically include the current date and time.
 # See: https://www.elastic.co/guide/en/elasticsearch/reference/current/date-math-index-names.html#date-math-index-names
@@ -67,6 +67,7 @@ $COLLECTION_METADATA_FILENAME = 'collection-metadata.json'
 $COLLECTION_OBJECTS_METADATA_FILENAME = 'objects-metadata.json'
 $COLLECTION_PDFS_SUBDIR = 'pdfs'
 $COLLECTION_EXTRACTED_PDF_TEXT_SUBDIR = 'extracted_pdfs_text'
+$COLLECTION_ELASTICSEARCH_SUBDIR = 'elasticsearch'
 $SEARCH_CONFIG_EXCLUDED_FIELDS = Set[
   'date is approximate',
   'duration',
@@ -103,8 +104,9 @@ $ES_PROFILE_ENV_MAP = {
 
 # Define which fields to extract from a collection website's JSON-LD data
 # for use as metadata.
+$COLLECTION_METADATA_TITLE_KEY = 'headline'
 $COLLECTION_JSON_LD_METADATA_KEYS = [
-  'headline',
+  $COLLECTION_METADATA_TITLE_KEY,
   'image',
   'description',
 ]
