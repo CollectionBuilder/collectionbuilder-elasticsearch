@@ -3,7 +3,6 @@
 
 require_relative 'lib/task-helpers'
 
-
 # Enclose CollectionBuilder-related tasks in a namespaced called "cb", to be
 # executed using the convention: `rake cb:{task_name}`
 namespace :cb do
@@ -12,8 +11,8 @@ namespace :cb do
   # build
   ###############################################################################
 
-  desc "Execute all build steps required to go from metadata file and directory of " \
-       "collection objects to a fully configured application"
+  desc "Execute all build steps required to go from a config-collection file to "\
+       "fully-populated Elasticsearch index"
   task :build, [:env] do |t, args|
     args.with_defaults(
       :env => 'DEVELOPMENT'
@@ -23,14 +22,26 @@ namespace :cb do
 
     profile = $ENV_ES_PROFILE_MAP[env]
 
-    announce 'Extract the text from PDF-type collection objects'
+    banner_announce 'Reading JSON-LD encoded metadata from the collection homepage URLs'
+    Rake::Task['cb:read_collections_metadata'].invoke
+
+    banner_announce 'Downloading collection object metadata files'
+    Rake::Task['cb:download_collections_objects_metadata'].invoke
+
+    banner_announce 'Generating the default search configuration'
+    Rake::Task['cb:generate_search_config'].invoke
+
+    banner_announce 'Downloading collection PDFs for text extraction'
+    Rake::Task['cb:download_collections_pdfs'].invoke
+
+    banner_announce 'Extracting text from downloaded PDFs'
     Rake::Task['cb:extract_pdf_text'].invoke
 
-    announce 'Generate the collection search index data file'
-    Rake::Task['cb:generate_search_index_data'].invoke profile
+    banner_announce 'Generating the Elasticsearch index data files'
+    Rake::Task['cb:generate_collections_search_index_data'].invoke
 
-    announce 'Generate the collection search index settings file'
-    Rake::Task['cb:generate_search_index_settings'].invoke
+    banner_announce 'Generating the Elasticsearch index settings files'
+    Rake::Task['cb:generate_collections_search_index_settings'].invoke
 
     # Check that the Elasticsearch instance is available and accessible.
     while ! elasticsearch_ready profile
@@ -40,18 +51,18 @@ namespace :cb do
 
     # Create the directory index before the collection index so that the call
     # to create_index will automatically update the directory.
-    announce 'Create the directory index'
+    banner_announce 'Create the directory index'
     Rake::Task['es:create_directory_index'].invoke profile
 
-    announce 'Create the collection search index'
+    banner_announce 'Create the collection search index'
     Rake::Task['es:create_index'].invoke profile
 
-    announce 'Load the collection data file into the search index'
+    banner_announce 'Load the collection data file into the search index'
     Rake::Task['es:load_bulk_data'].invoke profile
 
     # TODO - maybe also enable daily snapshots
 
-    announce 'Search index is loaded and ready!'
+    banner_announce 'Search index is loaded and ready!'
     # Generate sample index document and directory index URLs.
     config = $get_config_for_es_profile.call profile
     proto = config[:elasticsearch_protocol]

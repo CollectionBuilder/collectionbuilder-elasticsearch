@@ -59,6 +59,13 @@ def announce msg
   puts "\n**** #{msg}"
 end
 
+def banner_announce msg
+  border = '*' * (msg.length + 10)
+  puts "\n#{border}"
+  puts "**** #{msg} ****"
+  puts border
+end
+
 # Convert a collection URL to an Elasticseatch index name using filename_escape
 # but with <scheme>:// and any trailing / removed.
 def collection_url_to_elasticsearch_index collection_url
