@@ -109,6 +109,22 @@ def read_collection_objects_metadata collection_url
   end
 end
 
+def read_search_config
+  # Return a search config <fieldName> => <configDict> map.
+  field_config_map = {}
+  begin
+    field_defs = CSV.parse(File.read($SEARCH_CONFIG_PATH), headers: true)
+  rescue Errno::ENOENT
+    puts "ERROR: Search config file (#{objects_metadata_path}) not found."
+    puts "Try running 'rake cb:generate_search_config' to generate it. "
+    exit 1
+  end
+  field_defs.each do |row|
+    field_config_map[row['field']] = row
+  end
+  return field_config_map
+end
+
 def get_ensure_collection_pdfs_dir collection_url
   collection_data_dir = get_ensure_collection_data_dir(collection_url)
   collection_pdfs_dir = File.join([collection_data_dir, $COLLECTION_PDFS_SUBDIR])

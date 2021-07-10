@@ -105,18 +105,62 @@ $ES_PROFILE_ENV_MAP = {
 # Define which fields to extract from a collection website's JSON-LD data
 # for use as metadata.
 $COLLECTION_METADATA_TITLE_KEY = 'headline'
+$COLLECTION_METADATA_DESCRIPTION_KEY = 'description'
 $COLLECTION_JSON_LD_METADATA_KEYS = [
   $COLLECTION_METADATA_TITLE_KEY,
+  $COLLECTION_METADATA_DESCRIPTION_KEY,
   'image',
-  'description',
 ]
 
 # Define the CollectionBuilder site path where the JSON metadata file lives.
 $COLLECTIONBUILDER_JSON_METADATA_PATH = '/assets/data/metadata.json'
 
+# Elasticsearch index settings-related configuration.
+$TEXT_FIELD_DEF_KEYS = [ 'field' ]
+$BOOL_FIELD_DEF_KEYS = [ 'index', 'display', 'facet', 'multi-valued' ]
+$VALID_FIELD_DEF_KEYS = $TEXT_FIELD_DEF_KEYS.dup.concat $BOOL_FIELD_DEF_KEYS
+$INDEX_SETTINGS_TEMPLATE = {
+  mappings: {
+    dynamic_templates: [
+      {
+        store_as_unindexed_text: {
+          match_mapping_type: "*",
+          mapping: {
+            type: "text",
+            index: false
+          }
+        }
+      }
+    ],
+    properties: {
+      # Define the set of static properties.
+      objectid: {
+        type: "text",
+        index: false
+      },
+      url: {
+        type: "text",
+        index: false,
+      },
+      thumbnailContentUrl: {
+        type: "text",
+        index: false,
+      },
+      collectionTitle: {
+        type: "text",
+        index: false,
+      },
+      collectionUrl: {
+        type: "text",
+        index: false,
+      }
+    }
+  }
+}
+
 
 ###############################################################################
-# Constants - these values should not be modified
+# Universal constants - these values should not be modified
 ###############################################################################
 
 $APPLICATION_JSON = 'application/json'

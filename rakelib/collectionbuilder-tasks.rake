@@ -169,17 +169,14 @@ namespace :cb do
     collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
 
     collection_urls.each do |collection_url|
-      collection_data_dir = get_ensure_collection_data_dir(collection_url)
-      collection_objects_metadata_path = File.join(
-        [ collection_data_dir, $COLLECTION_OBJECTS_METADATA_FILENAME]
-      )
-      objects_metadata = JSON.load File.open(collection_objects_metadata_path, 'rb')
-      pdf_objects_metadata = objects_metadata['objects'].select do |object_metadata|
+      objects_metadata = read_collection_objects_metadata collection_url
+      pdf_objects_metadata = objects_metadata.select do |object_metadata|
         object_metadata['format'] == $APPLICATION_PDF
       end
 
       if pdf_objects_metadata.length == 0
-        announce "#{collection_objects_metadata_path} contains no PDFs - skipping"
+        announce "#{get_collection_objects_metadata_path collection_url} contains "\
+                 "no PDFs - skipping"
         next
       end
 
@@ -269,7 +266,8 @@ namespace :cb do
       # Collect the set of unique values for each non-excluded field.
       field_uniq_values_map = Hash.new { |h,k| h[k] = Set[] }
       excluded_fields = Set[]
-      objects_metadata['objects'].each do |object_metadata|
+
+      objects_metadata.each do |object_metadata|
         object_metadata.each do |field,value|
           if $SEARCH_CONFIG_EXCLUDED_FIELDS.include? field
             excluded_fields.add(field)
@@ -287,7 +285,7 @@ namespace :cb do
 
       # Process the collected field values to determine which should be included in
       # the search config and with what characteristics.
-      num_objects = objects_metadata['objects'].length
+      num_objects = objects_metadata.length
       field_uniq_values_map.each do |field,values|
         # Ignore fields with no, non-empty values.
         if values.empty? or values.length == 1 and values.first == ''
@@ -305,6 +303,7 @@ namespace :cb do
           'display' => $SEARCH_CONFIG_DEFAULT_DISPLAY_FIELDS.include?(field),
           'facet' => facet,
           'multi-valued' => is_multi_valued,
+          'index' => true
         }
       end
     end
@@ -312,26 +311,35 @@ namespace :cb do
     # Combine the collection-specific search configs into a single config.
     search_config = {}
     collection_url_field_config_map.each do |collection_url,field_config_map|
-      field_config_map.each do |field,field_config|
+      field_config_map.each do |field, field_config|
         if not search_config.include? field
           search_config[field] = field_config
-        next
+          next
         end
-        search_config[field]['facet'] &= field_config['facet']
+        search_config[field]['index'] |= field_config['index']
         search_config[field]['multi-valued'] |= field_config['multi-valued']
+        search_config[field]['facet'] &= field_config['facet']
       end
+    end
+
+    # Ensure that any multi-valued field is also faceted.
+    search_config.values.each do |field_config|
+      field_config['facet'] |= field_config['multi-valued']
     end
 
     # Write out the search config file.
     CSV.open($SEARCH_CONFIG_PATH, 'w') do |writer|
-      writer << [ 'field', 'display', 'facet', 'multi-valued' ]
+      writer << [ 'field', 'display', 'index', 'facet', 'multi-valued' ]
       # TODO - probably sort this output in some desired display order.
       search_config.each do |k,config|
-        writer << [ k, config['display'], config['facet'], config['multi-valued'] ]
+        writer << [ k, config['display'], config['index'], config['facet'],
+                    config['multi-valued'] ]
       end
     end
     announce 'Done'
     puts "Wrote #{search_config.length} fields to: #{$SEARCH_CONFIG_PATH}"
+    puts "Please inspect and edit this file to customize the search index "\
+         "configuration and web application UI."
   end
 
   ###############################################################################
@@ -351,11 +359,7 @@ namespace :cb do
     config = load_config env
 
     # Create a search config <fieldName> => <configDict> map.
-    field_config_map = {}
-    CSV.open($SEARCH_CONFIG_PATH, 'r').read do |row|
-      puts row
-      field_config_map[row['field']] = row
-    end
+    field_search_config_map = read_search_config
 
     # Get collection-specific metadata and directories.
     collection_metadata = read_collection_metadata collection_url
@@ -375,7 +379,8 @@ namespace :cb do
 
       # Split each multi-valued field value into a list of values.
       item.each do |k, v|
-        if field_config_map.has_key? k and field_config_map[k]['multi-valued'] == "true"
+        if field_search_config_map.has_key? k \
+          and field_search_config_map[k]['multi-valued'] == "true"
           item[k] = (v or "").split(";").map { |s| s.strip }
         end
       end
@@ -441,7 +446,7 @@ namespace :cb do
 
 
   ###############################################################################
-  # generate_search_index_settings
+  # generate_collection_search_index_settings
   ###############################################################################
 
   # Generate a file that comprises the Mapping settings for the Elasticsearch index
@@ -449,55 +454,13 @@ namespace :cb do
   # https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping.html
 
   desc "Generate the settings file that we'll use to create the Elasticsearch index"
-  task :generate_search_index_settings do
-    TEXT_FIELD_DEF_KEYS = [ 'field' ]
-    BOOL_FIELD_DEF_KEYS = [ 'index', 'display', 'facet', 'multi-valued' ]
-    VALID_FIELD_DEF_KEYS = TEXT_FIELD_DEF_KEYS.dup.concat BOOL_FIELD_DEF_KEYS
-    INDEX_SETTINGS_TEMPLATE = {
-      mappings: {
-        dynamic_templates: [
-          {
-            store_as_unindexed_text: {
-              match_mapping_type: "*",
-              mapping: {
-                type: "text",
-                index: false
-              }
-            }
-          }
-        ],
-        properties: {
-          # Define the set of static properties.
-          objectid: {
-            type: "text",
-            index: false
-          },
-          url: {
-            type: "text",
-            index: false,
-          },
-          thumbnailContentUrl: {
-            type: "text",
-            index: false,
-          },
-          collectionTitle: {
-            type: "text",
-            index: false,
-          },
-          collectionUrl: {
-            type: "text",
-            index: false,
-          }
-        }
-      }
-    }
-
-    def assert_field_def_is_valid field_def
+  task :generate_collection_search_index_settings, [:collection_url] do |t, args|
+    def assert_field_def_is_valid field_name, field_def
       # Assert that the field definition is valid.
       keys = field_def.to_hash.keys
 
-      missing_keys = VALID_FIELD_DEF_KEYS.reject { |k| keys.include? k }
-      extra_keys = keys.reject { |k| VALID_FIELD_DEF_KEYS.include? k }
+      missing_keys = $VALID_FIELD_DEF_KEYS.reject { |k| keys.include? k }
+      extra_keys = keys.reject { |k| $VALID_FIELD_DEF_KEYS.include? k }
       if !missing_keys.empty? or !extra_keys.empty?
         msg = "The field definition: #{field_def}"
         if !missing_keys.empty?
@@ -509,14 +472,16 @@ namespace :cb do
         raise msg
       end
 
-      invalid_bool_value_keys = BOOL_FIELD_DEF_KEYS.reject { |k| ['true', 'false'].include? field_def[k] }
+      invalid_bool_value_keys = $BOOL_FIELD_DEF_KEYS.reject {
+        |k| ['true', 'false'].include? field_def[k]
+      }
       if !invalid_bool_value_keys.empty?
         raise "Expected true/false value for: #{invalid_bool_value_keys.join(", ")}"
       end
 
       if field_def['index'] == "false" and
         (field_def['facet'] == "true" or field_def['multi-valued'] == "true")
-        raise "Field (#{field_def['field']}) has index=false but other index-related "\
+        raise "Field (#{field_name}) has index=false but other index-related "\
               "fields (e.g. facet, multi-valued) specified as true"
       end
 
@@ -528,7 +493,7 @@ namespace :cb do
 
     def convert_field_def_bools field_def
       # Do an in-place conversion of the bool strings to python bool values.
-      BOOL_FIELD_DEF_KEYS.each do |k|
+      $BOOL_FIELD_DEF_KEYS.each do |k|
         field_def[k] = field_def[k] == "true"
       end
     end
@@ -551,29 +516,58 @@ namespace :cb do
     # Main block
     config = load_config :DEVELOPMENT
 
-    index_settings = INDEX_SETTINGS_TEMPLATE.dup
+    # Read the collection metadata.
+    collection_url = args.collection_url
+    collection_metadata = read_collection_metadata collection_url
+
+    index_settings = $INDEX_SETTINGS_TEMPLATE.dup
 
     # Add the _meta mapping field with information about the index itself.
     index_settings[:mappings]['_meta'] = {
-      :title => config[:collection_title],
-      :description => config[:collection_description],
+      :title => collection_metadata[$COLLECTION_METADATA_TITLE_KEY],
+      :description => collection_metadata[$COLLECTION_METADATA_DESCRIPTION_KEY],
     }
 
-    config[:search_config].each do |field_def|
-      assert_field_def_is_valid(field_def)
+    field_search_config_map = read_search_config
+    field_search_config_map.sort.each do |field_name, field_def|
+      assert_field_def_is_valid(field_name, field_def)
       convert_field_def_bools(field_def)
       if field_def['index']
-        index_settings[:mappings][:properties][field_def['field']] = get_mapping(field_def)
+        index_settings[:mappings][:properties][field_name] = get_mapping(field_def)
       end
     end
 
-    output_dir = config[:elasticsearch_dir]
-    $ensure_dir_exists.call output_dir
+    output_dir = get_ensure_collection_elasticsearch_dir collection_url
     output_path = File.join([output_dir, $ES_INDEX_SETTINGS_FILENAME])
     File.open(output_path, mode: 'w') do |f|
       f.write(JSON.pretty_generate(index_settings))
     end
     puts "Wrote: #{output_path}"
+  end
+
+
+  ###############################################################################
+  # generate_collections_search_index_settings
+  ###############################################################################
+
+  desc "Generate the Elasticsearch index settings files for all configured collections"
+  task :generate_collections_search_index_settings, [:env] do |t, args|
+    args.with_defaults(
+      :env => "DEVELOPMENT"
+    )
+    assert_env_arg_is_valid args.env
+
+    config = load_config args.env.to_sym
+
+    # Collect configured collection URLs.
+    collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
+
+    collection_urls.each do |collection_url|
+      Rake::Task['cb:generate_collection_search_index_settings'].execute(
+        Rake::TaskArguments.new([:env, :collection_url], [args.env, collection_url])
+      )
+    end
+
   end
 
 # Close the namespace.
