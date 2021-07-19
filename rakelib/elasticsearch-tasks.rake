@@ -27,7 +27,7 @@ namespace :es do
   desc "Pretty-print the list of existing indices to the console"
   task :list_indices, [:profile] do |t, args|
     # Make the API request, letting it fail if the response status != 200.
-    res = cat_indices args.profile
+    res = ES_API.cat_indices args.profile
 
     # Decode the response data.
     data = JSON.load res.body
@@ -206,7 +206,7 @@ namespace :es do
         :description => index_meta['description']
       }
 
-      res = update_document profile, directory_index, index_name, document
+      res = ES_API.update_document profile, directory_index, index_name, document
       puts "Added (#{index_name}) to the directory index"
     end
   end
