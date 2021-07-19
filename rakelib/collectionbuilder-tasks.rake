@@ -572,5 +572,38 @@ namespace :cb do
 
   end
 
+  ###############################################################################
+  # create_collections_search_indices
+  ###############################################################################
+
+  desc "Create Elasticsearch indices all configured collections"
+  task :create_collections_search_indices, [:env, :es_profile] do |t, args|
+    args.with_defaults(
+      :env => "DEVELOPMENT"
+    )
+    assert_env_arg_is_valid args.env
+
+    config = load_config args.env.to_sym
+
+    # Collect configured collection URLs.
+    collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
+
+    collection_urls.each do |collection_url|
+      index = collection_url_to_elasticsearch_index collection_url
+      es_dir = get_ensure_collection_elasticsearch_dir collection_url
+      settings_path = File.join([es_dir, $ES_INDEX_SETTINGS_FILENAME])
+      begin
+        Rake::Task['es:create_index'].execute(
+          Rake::TaskArguments.new(
+            [:profile, :index, :settings_path],
+            [args.es_profile, index, settings_path]
+          )
+        )
+      rescue SystemExit
+        # Catch SystemExit to prevent any sub-task abort() from terminating this task.
+      end
+    end
+  end
+
 # Close the namespace.
 end

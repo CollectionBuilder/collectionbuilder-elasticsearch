@@ -58,8 +58,11 @@ namespace :es do
       # The HTTP response code is 200, indicating that the index was created.
       # Print a message to the console and return true.
       puts "Created Elasticsearch index: #{index}"
-      # Update the directory index if it exists.
-      Rake::Task['es:update_directory_index'].invoke profile, 'false'
+      # Update the directory index if it exists. Use execute() to ensure that this is
+      # not restricted to a single task invocation.
+      Rake::Task['es:update_directory_index'].execute(
+        Rake::TaskArguments.new([:profile, :raise_on_missing], [profile, 'false'])
+      )
       next
     end
 
@@ -101,7 +104,11 @@ namespace :es do
       # Print a message to the console and return true.
       puts "Deleted Elasticsearch index: #{index}"
       # Update the directory index if it exists.
-      Rake::Task['es:update_directory_index'].invoke profile, 'false'
+      # Update the directory index if it exists. Use execute() to ensure that this is
+      # not restricted to a single task invocation.
+      Rake::Task['es:update_directory_index'].execute(
+        Rake::TaskArguments.new([:profile, :raise_on_missing], [profile, 'false'])
+      )
       next
     end
 
@@ -186,7 +193,7 @@ namespace :es do
     # Delete any old collection indices from the directory.
     indices_to_remove = directory_name_index_map.keys - collection_name_index_map.keys
     indices_to_remove.each do |index_name|
-      delete_document profile, directory_index, index_name
+      ES_API.delete_document profile, directory_index, index_name
       puts "Deleted (#{index_name}) from the directory index"
     end
 
