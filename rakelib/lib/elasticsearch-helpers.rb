@@ -144,117 +144,120 @@ end
 # Elasticsearch API Endpoint Wrappers
 ###############################################################################
 
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/cat-indices.html
-def cat_indices profile, **kwargs
-  return make_request profile, :GET, '/_cat/indices', **kwargs
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html
-def create_index profile, index, settings, **kwargs
-  return make_json_request profile, :PUT, "/#{index}", settings, **kwargs
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html
-def delete_index profile, index, **kwargs
-  return make_request profile, :DELETE, "/#{index}", **kwargs
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html
-def update_document profile, index, doc_id, doc, **kwargs
-  return make_json_request profile, :POST, "/#{index}/_doc/#{doc_id}", doc, **kwargs
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-delete.html
-def delete_document profile, index, doc_id, **kwargs
-  return make_request profile, :DELETE, "/#{index}/_doc/#{doc_id}", **kwargs
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/put-snapshot-repo-api.html
-def create_snapshot_repository profile, name, type, settings, **kwargs
-  return make_json_request profile, :PUT, "/_snapshot/#{name}",
-                           { :type => type, :settings => settings }, **kwargs
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/7.9/get-snapshot-repo-api.html
-def get_snapshot_repositories profile, **kwargs
-  return make_request profile, :GET, "/_snapshot", **kwargs
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/delete-snapshot-repo-api.html
-def delete_snapshot_repository profile, repository, **kwargs
-  return make_request profile, :DELETE, "/_snapshot/#{repository}", **kwargs
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/7.9/get-snapshot-api.html
-def get_repository_snapshots profile, repository, **kwargs
-  return make_request profile, :GET, "/_snapshot/#{repository}/*", **kwargs
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/create-snapshot-api.html
-def create_snapshot profile, repository, wait: true, name: nil, **kwargs
-  # Use the default snapshot name template if no name was specified.
-  if name == nil
-    name = $ES_MANUAL_SNAPSHOT_NAME_TEMPLATE
+module ES_API
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/cat-indices.html
+  def self.cat_indices profile, **kwargs
+    return make_request profile, :GET, '/_cat/indices', **kwargs
   end
-  # Exclude .security* indices.
-  data = { :indices => [ '*', '-.security*' ], :wait => wait }
-  return make_json_request profile, :PUT, "/_snapshot/#{repository}/#{name}", data, **kwargs
-end
 
 
-# https://www.elastic.co/guide/en/elasticsearch/reference/7.9/restore-snapshot-api.html
-def restore_snapshot profile, repository, snapshot, wait: true, **kwargs
-  path = "/_snapshot/#{repository}/#{snapshot}/_restore?wait_for_completion=#{wait}"
-  return make_request profile, :POST, path, **kwargs
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/delete-snapshot-api.html
-def delete_snapshot profile, repository, snapshot, **kwargs
-  return make_request profile, :DELETE, "/_snapshot/#{repository}/#{snapshot}", **kwargs
-end
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html
-def load_bulk_data profile, ndjson_data, **kwargs
-  return make_request profile, :POST, "/_bulk",
-                      body: ndjson_data,
-                      headers: { 'content-type' => 'application/x-ndjson' },
-                      **kwargs
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/slm-api-put-policy.html
-def create_snapshot_policy profile, name, data, **kwargs
-  return make_json_request profile, :PUT, "/_slm/policy/#{name}", data, **kwargs
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/slm-api-execute-lifecycle.html
-def execute_snapshot_policy profile, policy, **kwargs
-  return make_request profile, :POST, "/_slm/policy/#{policy}/_execute"
-end
-
-
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/slm-api-get-policy.html
-def get_snapshot_policy profile, policy: nil, **kwargs
-  path = '/_slm/policy'
-  if policy != nil
-    path += "/#{policy}"
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html
+  def self.create_index profile, index, settings, **kwargs
+    return make_json_request profile, :PUT, "/#{index}", settings, **kwargs
   end
-  return make_request profile, :GET, path, **kwargs
-end
 
 
-# https://www.elastic.co/guide/en/elasticsearch/reference/current/slm-api-delete-policy.html
-def delete_snapshot_policy profile, policy, **kwargs
-  return make_request profile, :DELETE, "/_slm/policy/#{policy}", **kwargs
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html
+  def self.delete_index profile, index, **kwargs
+    return make_request profile, :DELETE, "/#{index}", **kwargs
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html
+  def self.update_document profile, index, doc_id, doc, **kwargs
+    return make_json_request profile, :POST, "/#{index}/_doc/#{doc_id}", doc, **kwargs
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-delete.html
+  def self.delete_document profile, index, doc_id, **kwargs
+    return make_request profile, :DELETE, "/#{index}/_doc/#{doc_id}", **kwargs
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/put-snapshot-repo-api.html
+  def self.create_snapshot_repository profile, name, type, settings, **kwargs
+    return make_json_request profile, :PUT, "/_snapshot/#{name}",
+                             { :type => type, :settings => settings }, **kwargs
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/7.9/get-snapshot-repo-api.html
+  def self.get_snapshot_repositories profile, **kwargs
+    return make_request profile, :GET, "/_snapshot", **kwargs
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/delete-snapshot-repo-api.html
+  def self.delete_snapshot_repository profile, repository, **kwargs
+    return make_request profile, :DELETE, "/_snapshot/#{repository}", **kwargs
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/7.9/get-snapshot-api.html
+  def self.get_repository_snapshots profile, repository, **kwargs
+    return make_request profile, :GET, "/_snapshot/#{repository}/*", **kwargs
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/create-snapshot-api.html
+  def self.create_snapshot profile, repository, wait: true, name: nil, **kwargs
+    # Use the default snapshot name template if no name was specified.
+    if name == nil
+      name = $ES_MANUAL_SNAPSHOT_NAME_TEMPLATE
+    end
+    # Exclude .security* indices.
+    data = { :indices => [ '*', '-.security*' ], :wait => wait }
+    return make_json_request profile, :PUT, "/_snapshot/#{repository}/#{name}", data, **kwargs
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/7.9/restore-snapshot-api.html
+  def self.restore_snapshot profile, repository, snapshot, wait: true, **kwargs
+    path = "/_snapshot/#{repository}/#{snapshot}/_restore?wait_for_completion=#{wait}"
+    return make_request profile, :POST, path, **kwargs
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/delete-snapshot-api.html
+  def self.delete_snapshot profile, repository, snapshot, **kwargs
+    return make_request profile, :DELETE, "/_snapshot/#{repository}/#{snapshot}", **kwargs
+  end
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html
+  def self.load_bulk_data profile, ndjson_data, **kwargs
+    return make_request profile, :POST, "/_bulk",
+                        body: ndjson_data,
+                        headers: { 'content-type' => 'application/x-ndjson' },
+                        **kwargs
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/slm-api-put-policy.html
+  def self.create_snapshot_policy profile, name, data, **kwargs
+    return make_json_request profile, :PUT, "/_slm/policy/#{name}", data, **kwargs
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/slm-api-execute-lifecycle.html
+  def self.execute_snapshot_policy profile, policy, **kwargs
+    return make_request profile, :POST, "/_slm/policy/#{policy}/_execute"
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/slm-api-get-policy.html
+  def self.get_snapshot_policy profile, policy: nil, **kwargs
+    path = '/_slm/policy'
+    if policy != nil
+      path += "/#{policy}"
+    end
+    return make_request profile, :GET, path, **kwargs
+  end
+
+
+  # https://www.elastic.co/guide/en/elasticsearch/reference/current/slm-api-delete-policy.html
+  def self.delete_snapshot_policy profile, policy, **kwargs
+    return make_request profile, :DELETE, "/_slm/policy/#{policy}", **kwargs
+  end
+
 end

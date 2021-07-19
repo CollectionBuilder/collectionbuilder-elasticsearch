@@ -5,77 +5,13 @@ require_relative 'lib/task-helpers'
 require_relative 'lib/elasticsearch-helpers'
 
 require 'json'
+require 'tempfile'
 
 
 # Define an Elasticsearch error response abort helper.
 def _abort what_failed, data
   abort "[ERROR] #{what_failed} failed - " \
         "Elasticsearch responded with:\n#{JSON.pretty_generate(data)}"
-end
-
-
-# Define a create_index helper for use by both the create_index and
-# create_directory_index tasks that returns a bool indicating whether the
-# index was created.
-def _create_index profile, index, settings
-  # Attempt to create the index.
-  res = create_index profile, index, settings, raise_for_status: false
-
-  if res.code == '200'
-    # The HTTP response code is 200, indicating that the index was created.
-    # Print a message to the console and return true.
-    puts "Created Elasticsearch index: #{index}"
-    return true
-  end
-
-  # The HTTP response code was not 200.
-  # Decode the JSON response body to read the error.
-  data = JSON.load res.body
-
-  # If creation failed because the index already exists, print a message
-  # to the console and return false.
-  if data['error']['type'] == 'resource_already_exists_exception'
-    puts "Elasticsearch index (#{index}) already exists"
-    return false
-  end
-
-  # Abort on unexpected error.
-  _abort 'Index creation', data
-end
-
-
-# Define a _delete_index helper for use by both the delete_index and
-# delete_directory_index tasks that returns a bool indicating whether the
-# index was deleted.
-def _delete_index profile, index
-  # Confirm that the user really wants to delete the index.
-  res = prompt_user_for_confirmation "Really delete index \"#{index}\"?"
-  if res == false
-    return false
-  end
-
-  # Attempt to delete the index.
-  res = delete_index profile, index, raise_for_status: false
-
-  if res.code == '200'
-    # The HTTP response code is 200, indicating that the index was created.
-    # Print a message to the console and return true.
-    puts "Deleted Elasticsearch index: #{index}"
-    return true
-  end
-
-  # Decode the JSON response body to read the error.
-  data = JSON.load res.body
-
-  # If creation failed because the index didn't exist, print a message
-  # to the console and return false.
-  if data['error']['type'] == 'index_not_found_exception'
-    puts "Delete failed. Elasticsearch index (#{index}) does not exist."
-    return false
-  end
-
-  # Abort on unexpected error.
-  _abort 'Index deletion', data
 end
 
 
@@ -106,23 +42,39 @@ namespace :es do
   ###############################################################################
 
   desc "Create the Elasticsearch index"
-  task :create_index, [:profile] do |t, args|
+  task :create_index, [:profile, :index, :settings_path ] do |t, args|
     # Read the index name from the config.
-    config = $get_config_for_es_profile.call args.profile
-    index = config[:elasticsearch_index]
-
-    # Load the index settings from the local generated index settings file.
-    dev_config = load_config :DEVELOPMENT
-    settings_file_path = File.join([dev_config[:elasticsearch_dir], $ES_INDEX_SETTINGS_FILENAME])
+    profile = args.profile
+    config = $get_config_for_es_profile.call profile
 
     # Read the settings file.
-    settings = JSON.load File.open(settings_file_path, 'r', encoding: 'utf-8')
+    settings = JSON.load File.open(args.settings_path, 'r', encoding: 'utf-8')
 
-    # Call the _create_index helper.
-    _create_index args.profile, index, settings
+    # Attempt to create the index.
+    index = args.index
+    res = ES_API.create_index profile, index, settings, raise_for_status: false
 
-    # Update the directory index if it exists.
-    Rake::Task['es:update_directory_index'].invoke args.profile, 'false'
+    if res.code == '200'
+      # The HTTP response code is 200, indicating that the index was created.
+      # Print a message to the console and return true.
+      puts "Created Elasticsearch index: #{index}"
+      # Update the directory index if it exists.
+      Rake::Task['es:update_directory_index'].invoke profile, 'false'
+      next
+    end
+
+    # The HTTP response code was not 200.
+    # Decode the JSON response body to read the error.
+    data = JSON.load res.body
+
+    # If creation failed because the index already exists, print a message
+    # to the console and return false.
+    if data['error']['type'] == 'resource_already_exists_exception'
+      abort "Elasticsearch index (#{index}) already exists"
+    end
+
+    # Abort on unexpected error.
+    _abort 'Index creation', data
   end
 
 
@@ -131,16 +83,39 @@ namespace :es do
   ###############################################################################
 
   desc "Delete the Elasticsearch index"
-  task :delete_index, [:profile] do |t, args|
-    # Read the index name from the config.
-    config = $get_config_for_es_profile.call args.profile
-    index = config[:elasticsearch_index]
+  task :delete_index, [:profile, :index] do |t, args|
+    profile = args.profile
+    index = args.index
 
-    # Call the _delete_index helper.
-    _delete_index args.profile, index
+    # Confirm that the user really wants to delete the index.
+    res = prompt_user_for_confirmation "Really delete index \"#{index}\"?"
+    if res == false
+      return false
+    end
 
-    # Update the directory index if it exists.
-    Rake::Task['es:update_directory_index'].invoke args.profile, 'false'
+    # Attempt to delete the index.
+    res = ES_API.delete_index profile, index, raise_for_status: false
+
+    if res.code == '200'
+      # The HTTP response code is 200, indicating that the index was created.
+      # Print a message to the console and return true.
+      puts "Deleted Elasticsearch index: #{index}"
+      # Update the directory index if it exists.
+      Rake::Task['es:update_directory_index'].invoke profile, 'false'
+      next
+    end
+
+    # Decode the JSON response body to read the error.
+    data = JSON.load res.body
+
+    # If creation failed because the index didn't exist, print a message
+    # to the console and return false.
+    if data['error']['type'] == 'index_not_found_exception'
+      abort "Delete failed. Elasticsearch index (#{index}) does not exist."
+    end
+
+    # Abort on unexpected error.
+    _abort 'Index deletion', data
   end
 
 
@@ -154,11 +129,13 @@ namespace :es do
     config = $get_config_for_es_profile.call args.profile
     index = config[:elasticsearch_directory_index]
 
-    # Read the directory index settings from a global constant.
-    settings = $ES_DIRECTORY_INDEX_SETTINGS
-
-    # Call the _create_index helper.
-    _create_index args.profile, index, settings
+    # Read the directory index settings from a global constant and write it to
+    # a temporary file and invoke the es:create_index task with that path.
+    Tempfile.create('directory-index-settings.json') do |f|
+      f.write(JSON.pretty_generate($ES_DIRECTORY_INDEX_SETTINGS))
+      f.seek(0)
+      Rake::Task['es:create_index'].invoke args.profile, index, f.path
+    end
   end
 
 
@@ -178,7 +155,7 @@ namespace :es do
     directory_index = config[:elasticsearch_directory_index]
 
     # Get the list of existing indices.
-    res = cat_indices args.profile
+    res = ES_API.cat_indices args.profile
     all_indices = JSON.load res.body
 
     # If no directory index exists, either raise an exception or silently return based on
@@ -245,8 +222,7 @@ namespace :es do
     config = $get_config_for_es_profile.call args.profile
     index = config[:elasticsearch_directory_index]
 
-    # Call the _delete_index helper.
-    _delete_index args.profile, index
+    Rake::Task['es:delete_index'].invoke args.profile, index
   end
 
 

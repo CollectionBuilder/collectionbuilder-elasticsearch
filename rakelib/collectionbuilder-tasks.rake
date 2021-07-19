@@ -182,7 +182,9 @@ namespace :cb do
 
       announce "Downloading PDFs from: #{collection_url}"
       pdfs_dir = get_ensure_collection_pdfs_dir(collection_url)
-      pdf_objects_metadata.each do |pdf_object_metadata|
+      # DEBUG
+      pdf_objects_metadata.slice(0, 4).each do |pdf_object_metadata|
+      #pdf_objects_metadata.each do |pdf_object_metadata|
         url = pdf_object_metadata['object_download']
         $stdout.write "Downloading: #{url} - "
         begin
