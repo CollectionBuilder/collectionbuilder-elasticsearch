@@ -88,9 +88,12 @@ export default class Search extends HTMLElement {
       )
     }
 
+    // Parse the search-multi property.
+    this.isMulti = this.hasAttribute("search-multi")
+
     // Read the Elasticsearch index property.
     this.esIndex = this.getAttribute("elasticsearch-index")
-    if (!this.esIndex) {
+    if (!this.esIndex && !this.isMulti) {
       throw new Error(
         'Please specify a valid <es-search> element "elasticsearch-index" value'
       )
@@ -128,9 +131,6 @@ export default class Search extends HTMLElement {
     } else {
       this.displayFields = []
     }
-
-    // Parse the search-multi property.
-    this.isMulti = this.hasAttribute("search-multi")
 
     // Get the indices directory data and use it to init the title/index maps.
     const indicesDirectory = await getIndicesDirectory(this.esUrl)

@@ -38,8 +38,7 @@
     "arrowParens": "avoid"
   },
   "husky": {
-    "hooks": {
-    }
+    "hooks": {}
   },
   "lint-staged": {
     "*.js": [

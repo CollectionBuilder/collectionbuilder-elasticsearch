@@ -8,9 +8,8 @@ layout: page
 
 <search-app
   elasticsearch-url="{{ site.elasticsearch-protocol }}://{{ site.elasticsearch-host }}:{{ site.elasticsearch-port }}"
-  elasticsearch-index="{{ site.elasticsearch-index }}"
   fields="{%- for f in allFields -%}{{ f.field }},{%- endfor -%}"
   faceted-fields="{%- for f in facetFields -%}{{ f.field }},{%- endfor -%}"
   display-fields="{%- for f in displayFields -%}{{ f.field }},{%- endfor -%}"
-  {% if page.layout == "multi-collection-search" %}search-multi{% endif %}
+  search-multi=""
 ></search-app>

@@ -54,4 +54,8 @@ RUN /bin/bash -c "source ~/.rvm/scripts/rvm && \
     bundle install"
 RUN echo 'source "$HOME/.rvm/scripts/rvm"' >> $HOME/.bashrc
 
+# Install nvm for building the search app
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh | bash
+RUN /bin/bash -i -c 'nvm install --default v13.8.0'
+
 CMD ["/bin/bash", "--login"]
