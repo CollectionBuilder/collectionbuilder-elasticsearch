@@ -425,19 +425,15 @@ namespace :es do
   task :load_bulk_data, [:profile, :datafile_path] do |t, args|
     # The data file must be a newline-separated JSON file as described here: https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html#docs-bulk-api-desc
     datafile_path = args.datafile_path
-    if datafile_path == nil
-      dev_config = load_config :DEVELOPMENT
-      datafile_path = File.join([dev_config[:elasticsearch_dir], $ES_BULK_DATA_FILENAME])
-    end
     data = File.open(datafile_path, 'rb').read
 
-    res = load_bulk_data args.profile, data, raise_for_status: false
+    res = ES_API.load_bulk_data args.profile, data, raise_for_status: false
 
     # Decode the response data.
     data = JSON.load res.body
 
     if res.code != '200'
-      _abort 'Restore snapshot', data
+      _abort 'Load bulk data', data
     end
 
     # Collect item counts.
@@ -459,7 +455,7 @@ namespace :es do
     end
 
     if index_num_items_map.length > 0
-      puts 'Indexed the following number of indice items:'
+      puts 'Indexed the following number of items:'
       index_num_items_map.entries.map do |index, count|
         puts "  #{index}: #{count}"
       end
@@ -602,6 +598,44 @@ namespace :es do
       else
         _abort 'Delete snapshot policy', data
       end
+    end
+  end
+
+
+  ###############################################################################
+  # disable_disk_quota_watermark
+  ###############################################################################
+
+  desc "Minimize the disk watermark to allow write operations on a near-full disk"
+  task :minimize_disk_watermark, [:profile] do |t, args|
+    # Adopted from: https://techoverflow.net/2019/04/17/how-to-disable-elasticsearch-disk-quota-watermark/
+
+    # Set the watermark extremely low.
+    res = make_json_request(
+      args.profile,
+      :PUT,
+      '/_cluster/settings',
+      {
+        'transient' => {
+          'cluster.routing.allocation.disk.watermark.low' => '30mb',
+          'cluster.routing.allocation.disk.watermark.high' => '20mb',
+          'cluster.routing.allocation.disk.watermark.flood_stage' => '10mb',
+          'cluster.info.update.interval' => '1m'
+        }
+      }
+    )
+    if res.code != '200'
+      _abort 'Minimize disk watermark', data
+    end
+
+    res = make_json_request(
+      args.profile,
+      :PUT,
+      '/_all/_settings',
+      { "index.blocks.read_only_allow_delete": nil }
+    )
+    if res.code != '200'
+      _abort 'Minimize disk watermark', data
     end
   end
 

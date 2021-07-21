@@ -182,7 +182,7 @@ namespace :cb do
 
       announce "Downloading PDFs from: #{collection_url}"
       pdfs_dir = get_ensure_collection_pdfs_dir(collection_url)
-      # DEBUG
+      # DEBUG - for demo
       pdf_objects_metadata.slice(0, 4).each do |pdf_object_metadata|
       #pdf_objects_metadata.each do |pdf_object_metadata|
         url = pdf_object_metadata['object_download']
@@ -607,6 +607,40 @@ namespace :cb do
 
 
   ###############################################################################
+  # load_collections_search_index_data
+  ###############################################################################
+
+  desc "Load data into Elasticsearch indices for all configured collections"
+  task :load_collections_search_index_data, [:env, :es_profile] do |t, args|
+    args.with_defaults(
+      :env => "DEVELOPMENT"
+    )
+    assert_env_arg_is_valid args.env
+
+    config = load_config args.env.to_sym
+
+    # Collect configured collection URLs.
+    collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
+
+    collection_urls.each do |collection_url|
+      es_dir = get_ensure_collection_elasticsearch_dir collection_url
+      datafile_path = File.join([es_dir, $ES_BULK_DATA_FILENAME])
+
+      begin
+        Rake::Task['es:load_bulk_data'].execute(
+          Rake::TaskArguments.new(
+            [:profile, :datafile_path],
+            [args.es_profile, datafile_path]
+          )
+        )
+      rescue SystemExit
+        # Catch SystemExit to prevent any sub-task abort() from terminating this task.
+      end
+    end
+  end
+
+
+  ###############################################################################
   # build
   ###############################################################################
 
@@ -651,17 +685,21 @@ namespace :cb do
     # Create the directory index before the collection index so that the call
     # to create_index will automatically update the directory.
     banner_announce 'Create the directory index'
-    Rake::Task['es:create_directory_index'].invoke profile
+    begin
+      Rake::Task['es:create_directory_index'].invoke profile
+    rescue SystemExit
+      # Catch SystemExit to prevent any sub-task abort() from terminating this task.
+    end
 
-    banner_announce 'Create the collection search index'
-    Rake::Task['es:create_index'].invoke profile
+    banner_announce 'Create a search index for each collection'
+    Rake::Task['cb:create_collections_search_indices'].invoke profile
 
-    banner_announce 'Load the collection data file into the search index'
-    Rake::Task['es:load_bulk_data'].invoke profile
+    banner_announce 'Load collection data into the search indices'
+    Rake::Task['cb:load_collections_search_index_data'].invoke profile
 
     # TODO - maybe also enable daily snapshots
 
-    banner_announce 'Search index is loaded and ready!'
+    banner_announce 'Search indices are loaded and ready!'
     # Generate sample index document and directory index URLs.
     config = $get_config_for_es_profile.call profile
     proto = config[:elasticsearch_protocol]
