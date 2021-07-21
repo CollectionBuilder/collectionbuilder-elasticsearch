@@ -322,6 +322,14 @@ namespace :cb do
       end
     end
 
+    # Always include full_text.
+    search_config['full_text'] = {
+      'display' => false,
+      'index' => true,
+      'facet' => false,
+      'multi-valued' => false
+    }
+
     # Ensure that any multi-valued field is also faceted.
     search_config.values.each do |field_config|
       field_config['facet'] |= field_config['multi-valued']
