@@ -102,14 +102,38 @@ $ES_PROFILE_ENV_MAP = {
   'PRODUCTION' =>  :PRODUCTION,
 }
 
-# Define which fields to extract from a collection website's JSON-LD data
-# for use as metadata.
-$COLLECTION_METADATA_TITLE_KEY = 'headline'
-$COLLECTION_METADATA_DESCRIPTION_KEY = 'description'
-$COLLECTION_JSON_LD_METADATA_KEYS = [
-  $COLLECTION_METADATA_TITLE_KEY,
-  $COLLECTION_METADATA_DESCRIPTION_KEY,
-  'image',
+# Define the valid config-collections fields.
+$VALID_COLLECTION_CONFIG_KEYS = [
+  'homepage_url',
+  'shortname',
+  'title',
+  'description',
+  'objects_metadata_url',
+  'image_url',
+]
+
+# Define which collection config fields must be specified.
+$REQUIRED_COLLECTION_CONFIG_KEYS = [ 'homepage_url' ]
+
+# Define the JSON-LD => collection-metadata-field mapping to use when retrieving
+# metadata from the collection's homepage_url.
+$JSON_LD_COLLECTION_METADATA_KEY_MAP = {
+  'headline' => 'title',
+  'description' => 'description',
+  'image' => 'image_url',
+}
+
+# The generated collection metadata file has the same fields as
+# config-collections.
+$COLLECTION_METADATA_KEYS = $VALID_COLLECTION_CONFIG_KEYS
+
+# Define the fields that must be specified in the final collection metadata
+# either in the collections config file or retrieved via JSON-LD, which can
+# not be otherwise derived.
+$REQUIRED_COLLECTION_METADATA_KEYS = [
+  'homepage_url',
+  'title',
+  'description',
 ]
 
 # Define the CollectionBuilder site path where the JSON metadata file lives.

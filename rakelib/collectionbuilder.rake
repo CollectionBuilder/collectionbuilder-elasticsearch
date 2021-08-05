@@ -5,8 +5,6 @@ require 'json'
 require 'open3'
 require 'open-uri'
 
-require 'nokogiri'
-
 require_relative 'lib/constants'
 
 
@@ -42,66 +40,50 @@ namespace :cb do
 
 
   ###############################################################################
-  # read_collections_metadata
+  # generate_collections_metadata
   ###############################################################################
 
-  desc "Read and save metadata from the configured collections websites"
-  task :read_collections_metadata do
-    config = load_config :DEVELOPMENT
-
-    # Collect configured collection URLs.
-    urls = config[:collections_config].map { |x| x['homepage_url'] }
+  desc "Generate metadata for each collection from local config and remote JSON-LD"
+  task :generate_collections_metadata do
+    collections_config = load_config(:DEVELOPMENT)[:collections_config]
 
     # Attempt to retrieve the required JSON-LD data from each collection home page.
     url_metadata_map = Hash.new { |h,k| h[k] = {} }
-    urls.each do |url|
-      announce "Retrieving metadata from: #{url}"
-      begin
-        res = URI.open url
-      rescue
-        puts 'FAILED - Could not open the URL'
-        next
-      end
+    collections_config.each do |collection_config|
+      url = collection_config['homepage_url']
+      announce "Generating metadata for collection #{url}"
 
-      begin
-        doc = Nokogiri.parse res.read
-      rescue
-        puts 'FAILED - Response is not valid HTML'
-        next
-      end
+      # Use the collection config as the initial metadata value.
+      collection_metadata = collection_config
 
-      data = {}
-      elements = doc.css('script[type="application/ld+json"]')
-      if elements.length == 0
-        puts 'FAILED - Response does not contain a JSON-LD script tag'
-      else
-        if elements.length > 1
-          puts 'WARNING - Reading only the first of multiple JSON-LD script tags'
-        end
-        script_tag = elements[0]
-        begin
-          data = JSON.parse(script_tag.text)
-        rescue
-          puts "FAILED - JSON-LD script tag contents is not valid JSON"
-        end
-      end
+      # Create a list of mapped JSON-LD keys that we can use to fill in empty fields.
+      json_ld_key_map = $JSON_LD_COLLECTION_METADATA_KEY_MAP.select {
+        |k, v| collection_metadata[v] == nil
+      }
 
-      collection_metadata = {}
-      $COLLECTION_JSON_LD_METADATA_KEYS.each do |k|
-        $stdout.write "#{k} => "
-        if data.has_key? k and data[k].length > 0
-          value = data[k]
-          snippet = value.slice(0, 20)
-          if value.length > 20
-            snippet += '...'
+      if json_ld_key_map.length > 0
+        # Attempt to fetch the parsed JSON-LD object.
+        json_ld = fetch_json_ld(url) or {}
+
+        if json_ld != nil
+          # Populate the empty fields using the JSON-LD data.
+          json_ld_key_map.each do |json_ld_k, metadata_k|
+            value = json_ld[json_ld_k]
+            if not value.nil? and not value.empty?
+              collection_metadata[metadata_k] = value
+              puts "Retrieved #{metadata_k} from JSON-LD as: \"#{value}\""
+            end
           end
-          puts "\"#{snippet}\""
-        else
-          puts "~ UNSPECIFIED ~"
-          $stdout.write "  Please enter a value for '#{k}': "
-          value = STDIN.gets.chomp.downcase
         end
-        collection_metadata[k] = value
+      end
+
+      # Prompt for any missing values that we can't automatically derive.
+      $REQUIRED_COLLECTION_METADATA_KEYS.each do |k|
+        if collection_metadata[k] == nil
+          $stdout.write "Could not determine a value for '#{k}' - " \
+                        "please provide one here: "
+          collection_metadata[k] = STDIN.gets.chomp
+        end
       end
 
       collection_data_dir = get_ensure_collection_data_dir(url)
@@ -182,7 +164,8 @@ namespace :cb do
 
       announce "Downloading PDFs from: #{collection_url}"
       pdfs_dir = get_ensure_collection_pdfs_dir(collection_url)
-      pdf_objects_metadata.each do |pdf_object_metadata|
+      #pdf_objects_metadata.each do |pdf_object_metadata|
+      pdf_objects_metadata.slice(0, 4).each do |pdf_object_metadata|
         url = pdf_object_metadata['object_download']
         $stdout.write "Downloading: #{url} - "
         begin
@@ -395,7 +378,7 @@ namespace :cb do
 
       item['url'] = item['reference_url']
       item['collectionUrl'] = collection_url
-      item['collectionTitle'] = collection_metadata[$COLLECTION_METADATA_TITLE_KEY]
+      item['collectionTitle'] = collection_metadata['title']
       item['thumbnailContentUrl'] = item['object_thumb'] or item['image_thumb']
 
       # If a extracted text file exists for the item, add the content of that file to
@@ -532,8 +515,8 @@ namespace :cb do
 
     # Add the _meta mapping field with information about the index itself.
     index_settings[:mappings]['_meta'] = {
-      :title => collection_metadata[$COLLECTION_METADATA_TITLE_KEY],
-      :description => collection_metadata[$COLLECTION_METADATA_DESCRIPTION_KEY],
+      :title => collection_metadata['title'],
+      :description => collection_metadata['description'],
     }
 
     field_search_config_map = read_search_config
@@ -662,7 +645,7 @@ namespace :cb do
     profile = $ENV_ES_PROFILE_MAP[env]
 
     banner_announce 'Reading JSON-LD encoded metadata from the collection homepage URLs'
-    Rake::Task['cb:read_collections_metadata'].invoke
+    Rake::Task['cb:generate_collections_metadata'].invoke
 
     banner_announce 'Downloading collection object metadata files'
     Rake::Task['cb:download_collections_objects_metadata'].invoke
