@@ -54,7 +54,7 @@ namespace :cb do
       announce "Generating metadata for collection #{url}"
 
       # Use the collection config as the initial metadata value.
-      collection_metadata = collection_config
+      collection_metadata = collection_config.to_hash
 
       # Create a list of mapped JSON-LD keys that we can use to fill in empty fields.
       json_ld_key_map = $JSON_LD_COLLECTION_METADATA_KEY_MAP.select {
