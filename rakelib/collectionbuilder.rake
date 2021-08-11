@@ -179,7 +179,8 @@ namespace :cb do
   ###############################################################################
 
   desc "Download collections PDFs for text extraction"
-  task :download_collections_pdfs do
+  task :download_collections_pdfs, [:test] do |t, args|
+    test = args.test == 'true'
     config = load_config :DEVELOPMENT
 
     # Collect configured collection URLs.
@@ -199,8 +200,13 @@ namespace :cb do
 
       announce "Downloading PDFs from: #{collection_url}"
       pdfs_dir = get_ensure_collection_pdfs_dir(collection_url)
-      #pdf_objects_metadata.each do |pdf_object_metadata|
-      pdf_objects_metadata.slice(0, 4).each do |pdf_object_metadata|
+
+      # If in test mode, limit the number of downloads to 5.
+      if test
+        pdf_objects_metadata = pdf_objects_metadata.slice(0, 5)
+      end
+
+      pdf_objects_metadata.each do |pdf_object_metadata|
         url = pdf_object_metadata['object_download']
         $stdout.write "Downloading: #{url} - "
         begin
@@ -418,12 +424,14 @@ namespace :cb do
 
       # If a extracted text file exists for the item, add the content of that file to
       # the item as the "full_text" property.
-      item_text_path = File.join(
-        [ extracted_text_dir, "#{filename_escape item['object_download']}.txt" ]
-      )
-      if File::exists? item_text_path
-        full_text = File.read(item_text_path, mode: "r", encoding: "utf-8")
-        item['full_text'] = full_text
+      if !item['object_download'].nil?
+        item_text_path = File.join(
+          [ extracted_text_dir, "#{filename_escape item['object_download']}.txt" ]
+        )
+        if File::exists? item_text_path
+          full_text = File.read(item_text_path, mode: "r", encoding: "utf-8")
+          item['full_text'] = full_text
+        end
       end
 
       # Use the MD5 of the reference_url as the document ID.
@@ -674,7 +682,7 @@ namespace :cb do
 
   desc "Execute all build steps required to go from a config-collection file to "\
        "fully-populated Elasticsearch index"
-  task :build, [:env] do |t, args|
+  task :build, [:env, :test] do |t, args|
     args.with_defaults(
       :env => 'DEVELOPMENT'
     )
@@ -693,7 +701,7 @@ namespace :cb do
     Rake::Task['cb:generate_search_config'].invoke
 
     banner_announce 'Downloading collection PDFs for text extraction'
-    Rake::Task['cb:download_collections_pdfs'].invoke
+    Rake::Task['cb:download_collections_pdfs'].invoke args.test
 
     banner_announce 'Extracting text from downloaded PDFs'
     Rake::Task['cb:extract_pdf_text'].invoke
