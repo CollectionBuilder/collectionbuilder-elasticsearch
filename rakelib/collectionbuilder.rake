@@ -58,14 +58,14 @@ namespace :cb do
 
       # Create a list of mapped JSON-LD keys that we can use to fill in empty fields.
       json_ld_key_map = $JSON_LD_COLLECTION_METADATA_KEY_MAP.select {
-        |k, v| collection_metadata[v] == nil
+        |k, v| collection_metadata[v].empty?
       }
 
       if json_ld_key_map.length > 0
         # Attempt to fetch the parsed JSON-LD object.
-        json_ld = fetch_json_ld(url) or {}
+        json_ld = fetch_json_ld(url)
 
-        if json_ld != nil
+        if !json_ld.nil?
           # Populate the empty fields using the JSON-LD data.
           json_ld_key_map.each do |json_ld_k, metadata_k|
             value = json_ld[json_ld_k]
@@ -79,17 +79,52 @@ namespace :cb do
 
       # Prompt for any missing values that we can't automatically derive.
       $REQUIRED_COLLECTION_METADATA_KEYS.each do |k|
-        if collection_metadata[k] == nil
-          $stdout.write "Could not determine a value for '#{k}' - " \
-                        "please provide one here: "
-          collection_metadata[k] = STDIN.gets.chomp
+        is_generable = $GENERABLE_COLLECTION_METADATA_KEYS.include? k
+        if collection_metadata[k].empty?
+          while true
+            $stdout.write "Could not determine a value for '#{k}' - " \
+                          "please provide one here"
+            if is_generable
+              $stdout.write " (or leave blank to auto-generate)"
+            end
+            $stdout.write ": "
+            collection_metadata[k] = STDIN.gets.strip
+            # If the value is non-empty or is generable, abort the while loop,
+            # otherwise prompt again for the same value.
+            if !collection_metadata[k].empty? or is_generable
+              break
+            end
+            puts "A VALUE FOR '#{k}' IS REQUIRED"
+          end
         end
+      end
+
+      # Attempt to auto-generate remaining, unspecified values.
+      # Generate the shortname from the title.
+      if collection_metadata['shortname'].empty?
+        collection_metadata['shortname'] = filename_escape collection_metadata['title']
+      end
+      # If objects_metadata_url is unspecified, check whether a request to the default
+      # path is successful, and if so, use that, otherwise abort.
+      if collection_metadata['objects_metadata_url'].empty?
+        objects_metadata_url = (
+          url.delete_suffix('/') + '/' \
+          + $COLLECTIONBUILDER_JSON_METADATA_PATH.delete_prefix('/')
+        )
+        begin
+          URI.open objects_metadata_url
+        rescue
+          abort "Could not determine the objects JSON metadata URL"
+        end
+        # Request succeeded - use the default value.
+        puts "Using metadata at default collection path: #{$COLLECTIONBUILDER_JSON_METADATA_PATH}"
+        collection_metadata['objects_metadata_url'] = objects_metadata_url
       end
 
       collection_data_dir = get_ensure_collection_data_dir(url)
       output_path = get_collection_metadata_path url
       File.open(output_path, 'w') do |fh|
-        fh.write(JSON.dump collection_metadata)
+        fh.write(JSON.pretty_generate collection_metadata)
       end
       puts "Wrote: #{output_path}"
     end
@@ -108,11 +143,11 @@ namespace :cb do
     collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
 
     collection_urls.each do |collection_url|
-      url = collection_url.delete_suffix('/') + '/' \
-            + $COLLECTIONBUILDER_JSON_METADATA_PATH.delete_prefix('/')
-      announce "Downloading objects metadata from: #{url}"
+      objects_metadata_url = read_collection_metadata(collection_url)['objects_metadata_url']
+
+      announce "Downloading objects metadata from: #{objects_metadata_url}"
       begin
-        res = URI.open url
+        res = URI.open objects_metadata_url
       rescue
         puts 'FAILED - Could not open the URL'
         next

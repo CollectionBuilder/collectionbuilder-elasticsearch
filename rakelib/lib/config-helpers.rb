@@ -6,8 +6,9 @@ require_relative 'constants'
 
 
 def get_validate_collections_config
-  # Read and parse the file.
-  collections_config = CSV.parse(File.read($COLLECTIONS_CONFIG_PATH), headers: true)
+  # Parse the collections config file as a hash with stripped string values.
+  collections_config = CSV.parse(File.read('_data/config-collections.csv'), headers: true)
+                         .map { |row| row.entries.map { |k, v| [k, v.nil? ? "" : v.strip ] }.to_h }
 
   # Abort if no collections are configured.
   if collections_config.length == 0
@@ -15,7 +16,7 @@ def get_validate_collections_config
   end
 
   # Abort if any unsupported fields are defined.
-  invalid_keys = collections_config.first.headers.to_set.difference(
+  invalid_keys = collections_config.first.keys.to_set.difference(
     $VALID_COLLECTION_CONFIG_KEYS
   )
   if invalid_keys.length > 0

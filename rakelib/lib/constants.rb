@@ -136,6 +136,11 @@ $REQUIRED_COLLECTION_METADATA_KEYS = [
   'description',
 ]
 
+$GENERABLE_COLLECTION_METADATA_KEYS = [
+  'shortname',
+  'objects_metadata_url',
+]
+
 # Define the CollectionBuilder site path where the JSON metadata file lives.
 $COLLECTIONBUILDER_JSON_METADATA_PATH = '/assets/data/metadata.json'
 
