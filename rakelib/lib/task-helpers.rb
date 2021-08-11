@@ -1,5 +1,12 @@
 
+require 'json'
+require 'logger'
+require 'open-uri'
+
+require 'nokogiri'
+
 require_relative './constants'
+
 
 # If a specified directory doesn't exist, create it.
 $ensure_dir_exists = ->(dir) { if !Dir.exists?(dir) then Dir.mkdir(dir) end }
@@ -64,6 +71,41 @@ def banner_announce msg
   puts "\n#{border}"
   puts "**** #{msg} ****"
   puts border
+end
+
+# Attempt to return the parsed JSON-LD data from a specified URL.
+def fetch_json_ld url, logger=Logger.new(STDERR, level: Logger::WARN)
+  logger.debug "Fetching JSON-LD from #{url}"
+  begin
+    res = URI.open url
+  rescue
+    logger.warn "Could not open #{url}"
+    return
+  end
+
+  begin
+    doc = Nokogiri.parse res.read
+  rescue
+    logger.warn "Response from #{url} is not valid HTML"
+    return
+  end
+
+  elements = doc.css('script[type="application/ld+json"]')
+  if elements.length == 0
+    logger.warn "Response from #{url} does not contain a JSON-LD script tag"
+    return
+  end
+
+  if elements.length > 1
+    logger.warn "Reading only the first of multiple JSON-LD script tags at #{url}"
+  end
+  script_tag = elements[0]
+
+  begin
+    return JSON.parse(script_tag.text)
+  rescue
+    logger.warn "JSON-LD script tag contents at #{url} is not valid JSON"
+  end
 end
 
 # Convert a collection URL to an Elasticseatch index name using filename_escape
