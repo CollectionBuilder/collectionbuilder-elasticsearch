@@ -51,7 +51,7 @@ namespace :cb do
     url_metadata_map = Hash.new { |h,k| h[k] = {} }
     collections_config.each do |collection_config|
       url = collection_config['homepage_url']
-      announce "Generating metadata for collection #{url}"
+      announce "Generating metadata for collection: #{url}"
 
       # Use the collection config as the initial metadata value.
       collection_metadata = collection_config.to_hash
@@ -626,6 +626,10 @@ namespace :cb do
       rescue SystemExit
         # Catch SystemExit to prevent any sub-task abort() from terminating this task.
       end
+      # Wait a short time to allow the directory index to update to prevent
+      # multiple "Added ... to the directory index" notifications for any single
+      # index.
+      sleep 2
     end
   end
 
@@ -679,7 +683,7 @@ namespace :cb do
 
     profile = $ENV_ES_PROFILE_MAP[env]
 
-    banner_announce 'Reading JSON-LD encoded metadata from the collection homepage URLs'
+    banner_announce 'Generating collection metadata'
     Rake::Task['cb:generate_collections_metadata'].invoke
 
     banner_announce 'Downloading collection object metadata files'
@@ -731,7 +735,7 @@ namespace :cb do
     port = config[:elasticsearch_port]
     es_url = "#{proto}://#{host}:#{port}"
 
-    index_doc_url = "#{es_url}/#{config[:elasticsearch_index]}/_search?size=1"
+    index_doc_url = "#{es_url}/_search?size=1"
     puts "To view a sample search index document, visit: #{index_doc_url}"
 
     directory_index_url = "#{es_url}/#{config[:elasticsearch_directory_index]}/_search"
