@@ -144,6 +144,24 @@ $GENERABLE_COLLECTION_METADATA_KEYS = [
 # Define the CollectionBuilder site path where the JSON metadata file lives.
 $COLLECTIONBUILDER_JSON_METADATA_PATH = '/assets/data/metadata.json'
 
+# Define a mapping of canonical object metadata keys that are used during the
+# build process to a prioritized list of key aliases. When looking up an object's
+# metadata value, if the canonical key is absent or the corresponding value empty,
+# a lookup using the first key in the aliases list will then be attempted, if that
+# is absent or its corresponding value empty, the next alias will be attempted, ...
+#
+# For example, a previous version of the canonical schema used 'object_download'
+# as the download URL key, whereas the current schema uses 'object_location'.
+# To maintain compatibility with collections deployed using the old schema, we
+# specify 'object_download' as an alias for 'object_location':
+$OBJECT_METADATA_KEY_ALIASES_MAP = {
+  'format' => [],
+  'objectid' => [],
+  'object_location' => [ 'object_download' ],
+  'image_thumb' => [ 'object_thumb' ],
+  'reference_url' => [],
+}
+
 # Elasticsearch index settings-related configuration.
 $TEXT_FIELD_DEF_KEYS = [ 'field' ]
 $BOOL_FIELD_DEF_KEYS = [ 'index', 'display', 'facet', 'multi-valued' ]
@@ -191,6 +209,10 @@ $INDEX_SETTINGS_TEMPLATE = {
 ###############################################################################
 # Universal constants - these values should not be modified
 ###############################################################################
+
+$WARN = 'warn'
+$RAISE = 'raise'
+$IGNORE = 'ignore'
 
 $APPLICATION_JSON = 'application/json'
 $APPLICATION_PDF = 'application/pdf'

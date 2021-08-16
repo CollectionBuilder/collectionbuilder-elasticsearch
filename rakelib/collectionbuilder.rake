@@ -143,7 +143,8 @@ namespace :cb do
     collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
 
     collection_urls.each do |collection_url|
-      objects_metadata_url = read_collection_metadata(collection_url)['objects_metadata_url']
+      collection_metadata = read_collection_metadata(collection_url)
+      objects_metadata_url = collection_metadata['objects_metadata_url']
 
       announce "Downloading objects metadata from: #{objects_metadata_url}"
       begin
@@ -207,7 +208,7 @@ namespace :cb do
       end
 
       pdf_objects_metadata.each do |pdf_object_metadata|
-        url = pdf_object_metadata['object_download']
+        url = object_metadata_get(pdf_object_metadata, 'object_location', $RAISE)
         $stdout.write "Downloading: #{url} - "
         begin
           res = URI.open url
@@ -404,6 +405,7 @@ namespace :cb do
     index_name = collection_url_to_elasticsearch_index collection_url
 
     num_items = 0
+    num_missing_thumbs = 0
     # Iterate through the object metadatas.
     objects_metadata.each do |item|
       # Remove any fields with an empty value.
@@ -417,16 +419,23 @@ namespace :cb do
         end
       end
 
-      item['url'] = item['reference_url']
+      reference_url = object_metadata_get(item, 'reference_url', $RAISE)
+      item['url'] = reference_url
       item['collectionUrl'] = collection_url
       item['collectionTitle'] = collection_metadata['title']
-      item['thumbnailContentUrl'] = item['object_thumb'] or item['image_thumb']
+      begin
+        item['thumbnailContentUrl'] = object_metadata_get(item, 'image_thumb', $RAISE)
+      rescue NameError
+        item['thumbnailContentUrl'] = ''
+        num_missing_thumbs += 1
+      end
 
       # If a extracted text file exists for the item, add the content of that file to
       # the item as the "full_text" property.
-      if !item['object_download'].nil?
+      download_url = object_metadata_get(item, 'object_location', $IGNORE)
+      if not download_url.nil?
         item_text_path = File.join(
-          [ extracted_text_dir, "#{filename_escape item['object_download']}.txt" ]
+          [ extracted_text_dir, "#{filename_escape download_url}.txt" ]
         )
         if File::exists? item_text_path
           full_text = File.read(item_text_path, mode: "r", encoding: "utf-8")
@@ -435,7 +444,7 @@ namespace :cb do
       end
 
       # Use the MD5 of the reference_url as the document ID.
-      doc_id = Digest::MD5.hexdigest item['reference_url']
+      doc_id = Digest::MD5.hexdigest reference_url
 
       # Write the action_and_meta_data line.
       output_file.write(
@@ -446,6 +455,12 @@ namespace :cb do
       output_file.write("#{JSON.dump(item.to_hash)}\n")
 
       num_items += 1
+    end
+
+    if num_missing_thumbs > 0
+      $logger.warn(
+        "#{num_missing_thumbs} of #{num_items} items are missing a 'image_thumb' values"
+      )
     end
 
     output_file.close

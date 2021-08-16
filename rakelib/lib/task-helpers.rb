@@ -74,37 +74,37 @@ def banner_announce msg
 end
 
 # Attempt to return the parsed JSON-LD data from a specified URL.
-def fetch_json_ld url, logger=Logger.new(STDERR, level: Logger::WARN)
-  logger.debug "Fetching JSON-LD from #{url}"
+def fetch_json_ld url
+  $logger.debug "Fetching JSON-LD from #{url}"
   begin
     res = URI.open url
   rescue
-    logger.warn "Could not open #{url}"
+    $logger.warn "Could not open #{url}"
     return
   end
 
   begin
     doc = Nokogiri.parse res.read
   rescue
-    logger.warn "Response from #{url} is not valid HTML"
+    $logger.warn "Response from #{url} is not valid HTML"
     return
   end
 
   elements = doc.css('script[type="application/ld+json"]')
   if elements.length == 0
-    logger.warn "Response from #{url} does not contain a JSON-LD script tag"
+    $logger.warn "Response from #{url} does not contain a JSON-LD script tag"
     return
   end
 
   if elements.length > 1
-    logger.warn "Reading only the first of multiple JSON-LD script tags at #{url}"
+    $logger.warn "Reading only the first of multiple JSON-LD script tags at #{url}"
   end
   script_tag = elements[0]
 
   begin
     return JSON.parse(script_tag.text)
   rescue
-    logger.warn "JSON-LD script tag contents at #{url} is not valid JSON"
+    $logger.warn "JSON-LD script tag contents at #{url} is not valid JSON"
   end
 end
 
@@ -197,4 +197,38 @@ def get_ensure_collection_elasticsearch_dir collection_url
   )
   $ensure_dir_exists.call collection_elasticsearch_dir
   return collection_elasticsearch_dir
+end
+
+
+# Define a helper to return an object metadata value based on a
+# specified key and any defined, prioritized aliases.
+def object_metadata_get metadata, k, missing_action=$WARN
+  [k, *($OBJECT_METADATA_KEY_ALIASES_MAP[k] or [])].each do |k|
+    v = metadata[k]
+    if not v.nil? and not v.empty?
+      return v
+    end
+  end
+  if missing_action == $IGNORE
+    return nil
+  end
+  # Format the missing metadata value message. If the item includes an
+  # objectid, create a short message using that, otherwise include the
+  # whole item.
+  objectid = metadata['objectid']
+  if not objectid.nil? and not objectid.empty?
+    msg = "objectid=#{metadata['objectid']} is missing a required "\
+          "metadata value for (#{k})"
+  else
+    msg = "Object metadata is missing a required value for (#{k}): #{metadata}"
+  end
+  # Maybe take some missing-related action.
+  case missing_action
+  when $WARN
+    $logger.warn msg
+  when $RAISE
+    raise NameError msg
+  else
+    raise "Unsupported missing_action value: #{missing_action}"
+  end
 end
