@@ -6,6 +6,7 @@ require 'open3'
 require 'open-uri'
 
 require_relative 'lib/constants'
+require_relative 'lib/exceptions'
 
 
 # Enclose CollectionBuilder-related tasks in a namespaced called "cb", to be
@@ -170,6 +171,78 @@ namespace :cb do
       File.open(output_path, 'w') do |f|
         num_bytes = f.write(data)
         puts "Wrote #{num_bytes} bytes to: #{output_path}"
+      end
+    end
+  end
+
+
+  ###############################################################################
+  # analyze_collections_objects_metadata
+  ###############################################################################
+
+  desc "Analyze the downloaded collection object metadata files"
+  task :analyze_collections_objects_metadata do
+    config = load_config :DEVELOPMENT
+
+    # Collect configured collection URLs.
+    collection_urls = config[:collections_config].map { |x| x['homepage_url'] }
+
+    num_collections_with_invalid_optional = 0
+    num_collections_with_invalid_required = 0
+
+    collection_urls.each do |collection_url|
+      announce "Analyzing objects metadata for collection: #{collection_url}"
+
+      invalid_optional_fields = Hash.new(0)
+      invalid_required_fields = Hash.new(0)
+
+      objects_metadata = read_collection_objects_metadata collection_url
+      objects_metadata.each do |object_metadata|
+        $OBJECT_METADATA_KEY_ALIASES_MAP.keys.each do |k|
+          begin
+            object_metadata_get object_metadata, k, $RAISE
+          rescue InvalidObjectMetadataField
+            if $REQUIRED_OBJECT_METADATA_FIELDS.include? k
+              invalid_required_fields[k] += 1
+            else
+              invalid_optional_fields[k] += 1
+            end
+          end
+        end
+      end
+      if invalid_optional_fields.length > 0
+        num_collections_with_invalid_optional += 1
+        puts "\nFound empty or invalid values for the following OPTIONAL fields:"\
+             "\n#{JSON.pretty_generate invalid_optional_fields}"
+      end
+      if invalid_required_fields.length > 0
+        num_collections_with_invalid_required += 1
+        puts "\nFound missing or invalid values for the following REQUIRED fields:"\
+             "\n#{JSON.pretty_generate invalid_required_fields}"\
+             "\nPlease correct these values on the remote collection "\
+             "site, or edit the local copy at the below location, and try again:"\
+             "\n  #{get_collection_objects_metadata_path collection_url}"\
+             "\n"
+      end
+      if invalid_optional_fields.length == 0 and invalid_required_fields.length == 0
+        puts 'Looks great!'
+      end
+
+    end
+    if num_collections_with_invalid_optional > 0 \
+      or num_collections_with_invalid_required > 0
+      announce "Some optional and/or required fields that we normally include in the "\
+               "search index documents were found to be missing or invalid."\
+               "\nIf your metadata uses non-standard field names, "\
+               "the $OBJECT_METADATA_KEY_ALIASES_MAP configuration variable in "\
+               "rakelib/lib/constants.rb provides a means of mapping our names to "\
+               "yours. Please see the documentation in constants.rb for more "\
+               "information on how to do this."
+      if num_collections_with_invalid_required > 0
+        announce "Aborting due to #{num_collections_with_invalid_required} collections "\
+                 "with missing or invalid REQUIRED object metadata fields"\
+                 "\n\n"
+        abort
       end
     end
   end
@@ -425,7 +498,7 @@ namespace :cb do
       item['collectionTitle'] = collection_metadata['title']
       begin
         item['thumbnailContentUrl'] = object_metadata_get(item, 'image_thumb', $RAISE)
-      rescue NameError
+      rescue InvalidObjectMetadataField
         item['thumbnailContentUrl'] = ''
         num_missing_thumbs += 1
       end
@@ -711,6 +784,9 @@ namespace :cb do
 
     banner_announce 'Downloading collection object metadata files'
     Rake::Task['cb:download_collections_objects_metadata'].invoke
+
+    banner_announce 'Analyzing collection object metadata files'
+    Rake::Task['cb:analyze_collections_objects_metadata'].invoke
 
     banner_announce 'Generating the default search configuration'
     Rake::Task['cb:generate_search_config'].invoke

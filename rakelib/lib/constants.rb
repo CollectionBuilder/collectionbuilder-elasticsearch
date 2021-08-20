@@ -2,7 +2,19 @@
 # This file defines all of the constants and default configuration values used
 # by the various rake tasks.
 
-require "cgi"
+require 'cgi'
+require_relative 'validators'
+
+
+###############################################################################
+# Types and Validators
+###############################################################################
+
+$URL_STRING = 'url_string'
+
+$TYPE_VALIDATOR_MAP = {
+  $URL_STRING => $is_valid_url
+}
 
 
 ###############################################################################
@@ -160,6 +172,17 @@ $OBJECT_METADATA_KEY_ALIASES_MAP = {
   'object_location' => [ 'object_download' ],
   'image_thumb' => [ 'object_thumb' ],
   'reference_url' => [],
+}
+
+# Define which object metadata fields must be present.
+$REQUIRED_OBJECT_METADATA_FIELDS = Set[ 'reference_url' ]
+
+# Define a objects metadata field -> type map for all non-arbitrary string fields
+# so that we can enforce validation on these field values.
+$OBJECT_METADATA_FIELD_TYPE_MAP = {
+  'object_location' => $URL_STRING,
+  'image_thumb' => $URL_STRING,
+  'reference_url' => $URL_STRING
 }
 
 # Elasticsearch index settings-related configuration.

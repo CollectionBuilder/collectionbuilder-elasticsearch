@@ -1,0 +1,3 @@
+
+class InvalidObjectMetadataField < Exception
+end
