@@ -1,8 +1,10 @@
-WIP project doc: https://gist.github.com/derekenos/2244b4d6cb2387add0aeaa3ebb1d8c51
-
 # CollectionBuilder-Elasticsearch
 
 CollectionBuilder-Elasticsearch is a web application generator and toolset for configuring, administering, and searching collection data with Elasticsearch.
+
+## Building w/ Docker
+
+## Manual
 
 ### 0. Prerequisites
 
@@ -33,20 +35,29 @@ bundle install
 All of the defined rake tasks, as reported by `rake --tasks`:
 
 ```
-rake cb:build[env]                                                               # Execute all build steps required to go from metadata file a...
+rake cb:analyze_collections_objects_metadata                                     # Analyze the downloaded collection object metadata files
+rake cb:build[env,test]                                                          # Execute all build steps required to go from a config-collection file to fully-populated Elasticsearch index
+rake cb:create_collections_search_indices[env,es_profile]                        # Create Elasticsearch indices all configured collections
 rake cb:deploy                                                                   # Build site with production env
-rake cb:enable_daily_search_index_snapshots[profile]                             # Enable daily Elasticsearch snapshots to be written to the "...
+rake cb:download_collections_objects_metadata                                    # Download the object metadata files for each collection
+rake cb:download_collections_pdfs[test]                                          # Download collections PDFs for text extraction
+rake cb:enable_daily_search_index_snapshots[profile]                             # Enable daily Elasticsearch snapshots to be written to the "_elasticsearch_snapshots" directory of your Digital Ocean Space
 rake cb:extract_pdf_text                                                         # Extract the text from PDF collection objects
-rake cb:generate_search_index_data[env]                                          # Generate the file that we'll use to populate the Elasticsea...
-rake cb:generate_search_index_settings                                           # Generate the settings file that we'll use to create the Ela...
+rake cb:generate_collection_search_index_data[env,collection_url]                # Generate the file that we'll use to populate the Elasticsearch index via the Bulk API
+rake cb:generate_collection_search_index_settings[collection_url]                # Generate the settings file that we'll use to create the Elasticsearch index
+rake cb:generate_collections_metadata                                            # Generate metadata for each collection from local config and remote JSON-LD
+rake cb:generate_collections_search_index_data[env]                              # Generate the file that we'll use to populate the Elasticsearch index via the Bulk API for all configured collections
+rake cb:generate_collections_search_index_settings[env]                          # Generate the Elasticsearch index settings files for all configured collections
+rake cb:generate_search_config                                                   # Create an initial search config from the superset of all object fields
+rake cb:load_collections_search_index_data[env,es_profile]                       # Load data into Elasticsearch indices for all configured collections
 rake cb:serve[env]                                                               # Run the local web server
 rake es:create_directory_index[profile]                                          # Create the Elasticsearch directory index
-rake es:create_index[profile]                                                    # Create the Elasticsearch index
+rake es:create_index[profile,index,settings_path]                                # Create the Elasticsearch index
 rake es:create_snapshot[profile,repository,wait]                                 # Create a new Elasticsearch snapshot
 rake es:create_snapshot_policy[profile,policy,repository,schedule]               # Create a policy to enable automatic Elasticsearch snapshots
-rake es:create_snapshot_s3_repository[profile,bucket,base_path,repository_name]  # Create an Elasticsearch snapshot repository that uses S3-co...
+rake es:create_snapshot_s3_repository[profile,bucket,base_path,repository_name]  # Create an Elasticsearch snapshot repository that uses S3-compatible storage
 rake es:delete_directory_index[profile]                                          # Delete the Elasticsearch directory index
-rake es:delete_index[profile]                                                    # Delete the Elasticsearch index
+rake es:delete_index[profile,index]                                              # Delete the Elasticsearch index
 rake es:delete_snapshot[profile,snapshot,repository]                             # Delete an Elasticsearch snapshot
 rake es:delete_snapshot_policy[profile,policy]                                   # Delete an Elasticsearch snapshot policy
 rake es:delete_snapshot_repository[profile,repository]                           # Delete an Elasticsearch snapshot repository
@@ -56,9 +67,10 @@ rake es:list_snapshot_policies[profile]                                         
 rake es:list_snapshot_repositories[profile]                                      # List the existing Elasticsearch snapshot repositories
 rake es:list_snapshots[profile,repository_name]                                  # List available Elasticsearch snapshots
 rake es:load_bulk_data[profile,datafile_path]                                    # Load index data using the Bulk API
+rake es:minimize_disk_watermark[profile]                                         # Minimize the disk watermark to allow write operations on a near-full disk
 rake es:ready[profile]                                                           # Display whether the Elasticsearch instance is up and running
 rake es:restore_snapshot[profile,snapshot_name,wait,repository_name]             # Restore an Elasticsearch snapshot
-rake es:update_directory_index[profile,raise_on_missing]                         # Update the Elasticsearch directory index to reflect the cur...
+rake es:update_directory_index[profile,raise_on_missing]                         # Update the Elasticsearch directory index to reflect the current indices
 ```
 
 
@@ -69,20 +81,19 @@ You can find detailed information about many of these tasks in the section: [Man
 
 ##### Definitions
 
-All rake tasks are defined by the `.rake` files in the [rakelib/](https://github.com/CollectionBuilder/collectionbuilder-sa_draft/tree/split-rakefile/rakelib) directory. Note that the empty (less a comment justifying its existence) `Rakefile` in the project root exists only to signal to rake that it should look for tasks in `rakelib/`.
+All rake tasks are defined by the `.rake` files in the [rakelib/](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/tree/main/rakelib) directory. Note that the empty (less a comment justifying its existence) `Rakefile` in the project root exists only to signal to rake that it should look for tasks in `rakelib/`.
 
 The currently defined `.rake` files are as follows:
 
 | file | description |
 | --- | --- |
-| [collectionbuilder-tasks.rake](https://github.com/CollectionBuilder/collectionbuilder-sa_draft/blob/split-rakefile/rakelib/collectionbuilder-tasks.rake) | Single-operation project build tasks |
-| [collectionbuilder-multitasks.rake](https://github.com/CollectionBuilder/collectionbuilder-sa_draft/blob/split-rakefile/rakelib/collectionbuilder-multitasks.rake) | Multi-operation project build tasks |
-| [elasticsearch-tasks.rake](https://github.com/CollectionBuilder/collectionbuilder-sa_draft/blob/split-rakefile/rakelib/elasticsearch-tasks.rake) | Elasticsearch administration tasks |
+| [collectionbuilder.rake](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/main/rakelib/collectionbuilder.rake) | Single-operation project build tasks |
+| [elasticsearch.rake](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/main/rakelib/elasticsearch.rake) | Elasticsearch administration tasks |
 
 
 ##### Customization
 
-You can customize many of the default task configuration options by modifying the values in [rakelib/lib/constants.rb](https://github.com/CollectionBuilder/collectionbuilder-sa_draft/blob/split-rakefile/rakelib/lib/constants.rb)
+You can customize many of the default task configuration options by modifying the values in [rakelib/lib/constants.rb](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/main/rakelib/lib/constants.rb)
 
 
 ##### External Dependencies
@@ -187,20 +198,12 @@ elasticsearch-index: moscon_programs_collection
 ## Setting Up Your Local Development Environment
 
 
-### 1. Collect Your Data
+### 1. Configure your collections
 
-#### TODO - something automatic is probably going to happen here after interrogating configured collections for their metadata
-
-
-### 2. Set Your Search Configuration
-
-[config-search.csv](https://github.com/CollectionBuilder/collectionbuilder-sa_draft/blob/master/_data/config-search.csv) defines the settings for the fields that you want indexed and displayed in search.
-
-#### TODO - this is probably going to be auto-generated after interrogating configured collections for their metadata
+Add the collections you want to include in the build to the [config-collections.csv](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/main/_data/config-collections.csv) configuration file. Each row must specify at least a `homepage_url` value. Any other required, unspecified fields will be addressed during the build process, either automatically or through an input prompt.
 
 
-
-### 3. Start Elasticsearch
+### 2. Start Elasticsearch
 
 Though this step is platform dependent, you might accomplish this by executing `elasticsearch` in a terminal.
 
@@ -210,17 +213,21 @@ For example, if you [installed Elasticsearch under Ubuntu](#elasticsearch-instal
 sudo service elasticsearch start
 ```
 
-### 4. Build the project
+### 3. Build the project
 
-Use the `cb:build` rake task to automatically execute the following rake tasks:
+Use the [cb:build](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/29df8f39cc2f0d08e0b150561f78ad4a6fb524a3/rakelib/collectionbuilder.rake#L773) rake task to automatically execute the following rake tasks:
 
-- `cb:extract_pdf_text`
-- `cb:generate_search_index_data`
-- `cb:generate_search_index_settings`
-- `cs:create_directory_index`
-- `cs:create_index`
-- `cs:load_bulk_data`
-- `cb:create_search_index`
+1. `cb:generate_collections_metadata`
+2. `cb:download_collections_objects_metadata`
+3. `cb:analyze_collections_objects_metadata`
+4. `cb:generate_search_config`
+5. `cb:download_collections_pdfs`
+6. `cb:extract_pdf_text`
+7. `cb:generate_collections_search_index_data`
+8. `cb:generate_collections_search_index_settings`
+9. `es:create_directory_index`
+10. `cb:create_collections_search_indices`
+11. `cb:load_collections_search_index_data`
 
 Usage:
 
@@ -229,6 +236,12 @@ rake cb:build
 ```
 
 See [Manually building the project](#manually-building-the-project) for information on how to customize these build steps.
+
+
+### 4. Adjust Your Search Configuration
+
+`_data/config-search.csv` defines the settings for the fields that you want indexed and displayed in search. This configuration file is automatically generated
+during the build process via analysis of the collection object metadata by the [generate_search_config](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/29df8f39cc2f0d08e0b150561f78ad4a6fb524a3/rakelib/collectionbuilder.rake#L348) rake task. While the auto-generated config is a good starting point, we recommend that you audit and edit this file to refine the search experience.
 
 
 ### 5. Start the Development Server
@@ -462,21 +475,14 @@ The search configuration in `config-search.csv` is used by the `cb:generate_sear
 
 While there are a number of ways to achieve this (see: [Index Aliases and Zero Downtime](https://www.elastic.co/guide/en/elasticsearch/guide/current/index-aliases.html#index-aliases)), the easiest is to:
 
-1. Delete the existing index by executing the `es:delete_index` rake task. See `es:create_index` for how to specify a user profile name if you need to target your production Elasticsearch instance. Note that `es:delete_index` automatically [invokes `es:update_directory_index`](https://github.com/CollectionBuilder/collectionbuilder-sa_draft/blob/split-rakefile/rakelib/elasticsearch-tasks.rake#L143) to remove the deleted index from any existing directory.
+1. Delete the existing index by executing the `es:delete_index` rake task. See `es:create_index` for how to specify a user profile name if you need to target your production Elasticsearch instance. Note that `es:delete_index` automatically [invokes `es:update_directory_index`](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/29df8f39cc2f0d08e0b150561f78ad4a6fb524a3/rakelib/elasticsearch.rake#L154) to remove the deleted index from any existing directory.
 
-2. Execute the `cb:generate_search_index_settings` and `es:create_index` rake tasks to create a new index using the updated `config-search.csv` configuration
+2. Execute the `cb:generate_collection_search_index_settings` and `es:create_index` rake tasks to create a new index using the updated `config-search.csv` configuration 
 
 3. Execute the `es:load_bulk_data` rake task to load the documents into the new index
 
 
 ## Cross-Collection Search
-
-### TODO - update this
-
-Each site includes a search page that allows you to search across multiple collections hosted on the same Elasticsearch instance as the site's collection.
-This search page can be accessed directly via the path `/multi-collection-search/` or from (highlighted in yellow) the site-collection-specific search page:
-
-![Screenshot from 2020-09-11 10-24-57](https://user-images.githubusercontent.com/585182/92937759-bcf8c080-f419-11ea-9ff2-3aa6a3e39d27.png)
 
 ### The `directory_` Index
 
@@ -538,7 +544,7 @@ The cross-collection search page queries this index in order to populate its lis
 
 ### Creating the `directory_` Index
 
-Use the [es:create_directory_index](https://github.com/CollectionBuilder/collectionbuilder-sa_draft/blob/master/Rakefile#L876-L907) rake task to create the `directory_` index on your Elasticsearch instance.
+Use the [es:create_directory_index](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/29df8f39cc2f0d08e0b150561f78ad4a6fb524a3/rakelib/elasticsearch.rake#L134) rake task to create the `directory_` index on your Elasticsearch instance.
 
 Note that the `es:create_directory_index` task operates directly on the Elasticsearch instance and has no dependency on the collection-specific codebase in which you execute it.
 
@@ -559,7 +565,7 @@ rake es:create_directory_index[PRODUCTION]
 
 ### Updating the `directory_` Index
 
-Use the [es:update_directory_index](https://github.com/CollectionBuilder/collectionbuilder-sa_draft/blob/master/Rakefile#L910-L996) rake task to update the `directory_` index to reflect the current state of collection indices on the Elasticsearch instance. Note that the [es:create_index](https://github.com/CollectionBuilder/collectionbuilder-sa_draft/blob/split-rakefile/rakelib/elasticsearch-tasks.rake#L125) and [es:delete_index](https://github.com/CollectionBuilder/collectionbuilder-sa_draft/blob/split-rakefile/rakelib/elasticsearch-tasks.rake#L143) tasks automatically invoke `es:update_directory_index`.
+Use the [es:update_directory_index](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/main/rakelib/elasticsearch.rake#L154) rake task to update the `directory_` index to reflect the current state of collection indices on the Elasticsearch instance. Note that the [es:create_index](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/29df8f39cc2f0d08e0b150561f78ad4a6fb524a3/rakelib/elasticsearch.rake#L134) and [es:delete_index](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/29df8f39cc2f0d08e0b150561f78ad4a6fb524a3/rakelib/elasticsearch.rake#L227) tasks automatically invoke `es:update_directory_index`.
 
 The `es:update_directory_index` task works by querying Elasticsearch for a list of all available indices that it uses to update the `directory_` index documents by either generating new documents for unrepresented collection indices, or by removing documents that represent collection indices that no longer exist.
 
@@ -584,6 +590,92 @@ rake es:update_directory_index[PRODUCTION]
 ## Manually building the project<a id="manually-building-the-project"></a>
 
 The following section provides details on how to manually execute and customize each step of the project build process.
+
+### 0. The `_data/collections` directory structure
+
+During the build process, all generated and downloaded collection-specific files will be stored in collection-specific subdirectories of `_data/collections`.
+This tree has the structure:
+
+```
+└── _data
+    └── collections
+        ├── <COLLECTION_URL_FORMATTED_AS_FILENAME>
+        │   ├── collection-metadata.json
+        │   ├── elasticsearch
+        │   │   ├── bulk_data.jsonl
+        │   │   └── index_settings.json
+        │   ├── extracted_pdfs_text
+        │   │   ├── <PDF_URL_FORMATTED_AS_FILENAME>.txt
+        │       └── ...
+        │   ├── objects-metadata.json
+        │   └── pdfs
+        │       ├── <PDF_URL_FORMATTED_AS_FILENAME>
+        │       └── ...
+        └── ...
+```
+
+
+### 1. Generate Collections Metadata
+
+Use the `cb:generate_collections_metadata` rake task to generate a final metadata file for each configured collection in `_data/config-collections.csv`. If there are any required fields unspecified in `config-collection.csv`, an attempt will be made to retrieve these values by reading the JSON-LD data embedded in the response from the `homepage_url`. If any required values remain unsatisfied, you will be prompted for manual input of these values.
+
+This step will generate the `collection-metadata.json` file in the corresponding `_data/collections` subdirectory.
+
+Usage:
+```
+rake cb:generate_collections_metadata
+```
+
+### 2. Download Collections Object Metadata
+
+Use the `cb:download_collections_objects_metadata` rake task to download each collection's object metadata JSON file from either the `objects_metadata_url` specified in `config-collections.csv` or from the default website path of `/assets/data/metadata.json` as defined by the [$COLLECTIONBUILDER_JSON_METADATA_PATH variable in `rakelib/lib/constants.rb`](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/29df8f39cc2f0d08e0b150561f78ad4a6fb524a3/rakelib/lib/constants.rb#L157)
+
+This step will generate the `objects-metadata.json` file in the corresponding `_data/collections` subdirectory.
+
+Usage:
+```
+rake cb:download_collections_objects_metadata
+```
+
+### 3. Analyze the Objects Metadata
+
+Use the `cb:analyze_collections_objects_metadata` rake task to analyze the downloaded objects metadata files and display an warnings regrading missing or invalid values.
+
+Usage
+```
+rake cb:analyze_collections_objects_metadata
+```
+
+An error condition will be indicated by the collection-specific output:
+```
+**** Analyzing objects metadata for collection: <COLLECTION_URL>
+
+...
+
+Found missing or invalid values for the following REQUIRED fields:
+{
+  "<FIELD_NAME>": 1
+}
+Please correct these values on the remote collection site, or edit the local copy at the below location, and try again:
+  _data/collections/<COLLECTION_URL_ESCAPED_AS_FILENAME>/objects-metadata.json
+
+```
+and the final output line:
+```
+**** Aborting due to 1 collections with missing or invalid REQUIRED object metadata fields
+```
+
+The following help text will also be displayed:
+
+```
+**** Some optional and/or required fields that we normally include in the search index documents were found to be missing or invalid.
+If your metadata uses non-standard field names, the $OBJECT_METADATA_KEY_ALIASES_MAP configuration variable in rakelib/lib/constants.rb provides a means of mapping our names to yours. Please see the documentation in constants.rb for more information on how to do this.
+```
+
+Any required missing or invalid fields must be correctly before continuing on to the next step.
+
+
+# TODO - left off updating this section here
 
 ### 1. Generate and load the Elasticsearch data
 
