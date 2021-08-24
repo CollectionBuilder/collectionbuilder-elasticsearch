@@ -619,7 +619,7 @@ This tree has the structure:
 
 Use the `cb:generate_collections_metadata` rake task to generate a final metadata file for each configured collection in `_data/config-collections.csv`. If there are any required fields unspecified in `config-collection.csv`, an attempt will be made to retrieve these values by reading the JSON-LD data embedded in the response from the `homepage_url`. If any required values remain unsatisfied, you will be prompted for manual input of these values.
 
-This step will generate the `collection-metadata.json` file in the corresponding `_data/collections` subdirectory.
+This step will generate the `_data/collections/<COLLECTION_URL_FORMATTED_AS_FILENAME>/collection-metadata.json` files.
 
 Usage:
 ```
@@ -630,7 +630,7 @@ rake cb:generate_collections_metadata
 
 Use the `cb:download_collections_objects_metadata` rake task to download each collection's object metadata JSON file from either the `objects_metadata_url` specified in `config-collections.csv` or from the default website path of `/assets/data/metadata.json` as defined by the [$COLLECTIONBUILDER_JSON_METADATA_PATH variable in `rakelib/lib/constants.rb`](https://github.com/CollectionBuilder/collectionbuilder-elasticsearch/blob/29df8f39cc2f0d08e0b150561f78ad4a6fb524a3/rakelib/lib/constants.rb#L157)
 
-This step will generate the `objects-metadata.json` file in the corresponding `_data/collections` subdirectory.
+This step will generate the `_data/collections/<COLLECTION_URL_FORMATTED_AS_FILENAME>/bjects-metadata.json` files.
 
 Usage:
 ```
@@ -639,7 +639,9 @@ rake cb:download_collections_objects_metadata
 
 ### 3. Analyze the Objects Metadata
 
-Use the `cb:analyze_collections_objects_metadata` rake task to analyze the downloaded objects metadata files and display an warnings regrading missing or invalid values.
+Use the `cb:analyze_collections_objects_metadata` rake task to analyze the downloaded objects metadata files and display any warnings regrading missing or invalid values.
+
+This step will not generate any files.
 
 Usage
 ```
@@ -675,92 +677,106 @@ If your metadata uses non-standard field names, the $OBJECT_METADATA_KEY_ALIASES
 Any required missing or invalid fields must be correctly before continuing on to the next step.
 
 
-# TODO - left off updating this section here
+### 4. Generate the Default Search Configuration
 
-### 1. Generate and load the Elasticsearch data
+Use the `cb:generate_search_config` rake task to automatically generate a default search configuration by analyzing all of the downloaded object metadata files.
 
-#### 1.1 Extract PDF Text
-Use the `cb:extract_pdf_text` rake task to extract the text from your collection PDFs so that we can perform full-text searches on these documents.
+This step will generate the `_data/config-search.csv` file.
+
+Usage:
+```
+rake cb:generate_search_config
+```
+
+
+### 5. Download PDFs (for text extraction)
+
+Use the `cb:download_collections_pdfs` rake task to download all PDFs specified in the object metadata files to the local filesystem for text extraction.
+
+This step will download PDFs to the `_data/collections/<COLLECTION_URL_FORMATTED_AS_FILENAME>/pdfs/` directories.
+
+Usage:
+```
+rake cb:download_collections_pdfs
+```
+
+### 6. Extract PDF Text
+
+Use the `cb:extract_pdf_text` rake task to extract text from the downloaded PDFs.
+
+This step will download PDFs to the `_data/collections/<COLLECTION_URL_FORMATTED_AS_FILENAME>/extracted_pdfs_text/` directories.
 
 Usage:
 ```
 rake cb:extract_pdf_text
 ```
 
-#### 1.2 Generate the Search Index Data File
-Use the `cb:generate_search_index_data` rake task to generate a file, using the collection metadata and extracted PDF text, that can be used to populate the Elasticsearch index.
+
+<span name="generate-the-search-index-data-files"></span>
+### 7. Generate the Search Index Data Files
+
+Use the `cb:generate_collections_search_index_data` rake task to generate a search index data file for each collection which includes the object metadata and extracted PDF text.
+
+This step will generate the `_data/collections/<COLLECTION_URL_FORMATTED_AS_FILENAME>/elasticsearch/bulk_data.jsonl` files.
 
 Local development usage:
 ```
-rake cb:generate_search_index_data
+rake cb:generate_collections_search_index_data
 ```
 
 To target your production Elasticsearch instance, you must specify a user profile name argument:
 ```
-rake cb:generate_search_index_data[<profile-name>]
+rake cb:generate_collections_search_index_data[<profile-name>]
 ```
 
 For example, to specify the user profile name "PRODUCTION":
 ```
-rake cb:generate_search_index_data[PRODUCTION]
+rake cb:generate_collections_search_index_data[PRODUCTION]
 ```
 
+When you specify a user profile name, the task assumes that you want to target the production Elasticsearch instance and will read the connection information from `_config.production.yml` and the username / password for the specified profile from your Elasticsearch credentials file.
 
-#### 1.3 Generate the Search Index Settings File
-Use the `cb:generate_search_index_settings` rake task to create an Elasticsearch index settings file from the configuration in `config-search.csv`.
+See: [Creating Your Local Elasticsearch Credentials File](#creating-your-local-elasticsearch-credentials-file)
+
+
+### 8. Generate the Search Index Settings Files
+
+Use the `cb:generate_collections_search_index_settings` rake task to generate an Elasticsearch index settings file for each collection based on the previously-generated search configuration.
+
+This step will generate the `_data/collections/<COLLECTION_URL_FORMATTED_AS_FILENAME>/elasticsearch/index_settings.json` files.
 
 Usage:
 ```
-rake cb:generate_search_index_settings
+rake cb:generate_collections_search_index_settings
 ```
 
-#### 1.4 Create the Search Index
-Use the `es:create_index` rake task to create the Elasticsearch index from the index settings file. Note that this task automatically [invokes `es:update_directory_index`](https://github.com/CollectionBuilder/collectionbuilder-sa_draft/blob/split-rakefile/rakelib/elasticsearch-tasks.rake#L125) to update any existing directory index to include the newly-created index.
 
-**Windows** users may have trouble here with the various ports not allowing access.
+### 9. Create the Elasticsearch Directory Index
 
-Local development usage:
+Use the `es:create_directory_index` rake task to create the `_directory` index that is used to store information about which collection-specific indices exist on the server.
+
+Usage:
 ```
-rake es:create_index
+rake es:create_directory_index
 ```
+_See <a href="#generate-the-search-index-data-files">7. Generate the Search Index Data Files</a> for information on specifying a profile to target non-development environments._
 
-To target your production Elasticsearch instance, you must specify a user profile name argument:
+### 10. Create the Elasticsearch Collection Indices
 
+Use the `cb:create_collections_search_indices` rake task to create a search index for each collection using the previously-generated index settings.
+
+Usage:
 ```
-rake es:create_index[<profile-name>]
+rake cb:create_collections_search_indices
 ```
+_See <a href="#generate-the-search-index-data-files">7. Generate the Search Index Data Files</a> for information on specifying a profile to target non-development environments._
 
-For example, to specify the user profile name "PRODUCTION":
+### 11. Load the Collection Data into Elasticsearch
 
+Use the `cb:load_collections_search_index_data` rake task to load the previously-generate search index data files into their corresponding indices.
+
+Usage:
 ```
-rake es:create_index[PRODUCTION]
+rake cb:load_collections_search_index_data
 ```
-
-When you specify a user profile name, the task assumes that you want to target the production Elasticsearch instance and will read the connection information from `_config.production.yml` and the username / password for the specified profile from your Elasticsearch credentials file.
-
-See: [Creating Your Local Elasticsearch Credentials File](#creating-your-local-elasticsearch-credentials-file)
-
-
-#### 1.5 Load Data into the Search Index
-Use the `es:load_bulk_data` rake task to load the collection data into the Elasticsearch index.
-
-Local development usage:
-```
-rake es:load_bulk_data
-```
-
-To target your production Elasticsearch instance, you must specify a user profile name argument:
-
-```
-rake es:load_bulk_data[<profile-name>]
-```
-
-For example, to specify the user profile name "PRODUCTION":
-
-```
-rake es:load_bulk_data[PRODUCTION]
-```
-
-When you specify a user profile name, the task assumes that you want to target the production Elasticsearch instance and will read the connection information from `_config.production.yml` and the username / password for the specified profile from your Elasticsearch credentials file.
-
-See: [Creating Your Local Elasticsearch Credentials File](#creating-your-local-elasticsearch-credentials-file)
+_See <a href="#generate-the-search-index-data-files">7. Generate the Search Index Data Files</a> for information on specifying a profile to target non-development environments._
