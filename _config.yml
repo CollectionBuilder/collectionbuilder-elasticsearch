@@ -70,6 +70,6 @@ metadata: metadata
 # ELASTICSEARCH SETTINGS
 #
 elasticsearch-protocol: http
-elasticsearch-host: elasticsearch
+elasticsearch-host: localhost
 elasticsearch-port: 9200
 elasticsearch-directory-index: directory_
