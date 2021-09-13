@@ -58,7 +58,7 @@ export default class SearchFacets extends HTMLElement {
       // Create the SearchFacet component.
       const searchFacetEl = createElement(
         `<search-facet name="${key}" display-name="${snakeToTitleCase(key)}">
-           <search-facet-values initial-num-visible="5">
+           <search-facet-values initial-num-visible="14">
              ${buckets.map(bucketToSearchFacetValueStr).join("")}
            </search-facet-values>
          </search-facet>`

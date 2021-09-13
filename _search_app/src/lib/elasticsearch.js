@@ -22,7 +22,7 @@ export function buildQuery (
     q = "",
     filters = {},
     start = 0,
-    size = 10,
+    size = 20,
     fields = [ "*" ],
     aggregationNameFieldMap = {},
     _source = "*"
