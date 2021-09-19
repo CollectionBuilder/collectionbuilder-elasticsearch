@@ -6,9 +6,9 @@ services:
     image: collectionbuilder-elasticsearch-dev
     hostname: collectionbuilder-elasticsearch
     volumes:
-      - .aws:/home/ubuntu/.aws
-      - .elasticsearch:/home/ubuntu/.elasticsearch
-      - .:/home/ubuntu/collectionbuilder
+      - .aws:/home/${DOCKER_USER}/.aws
+      - .elasticsearch:/home/${DOCKER_USER}/.elasticsearch
+      - .:/home/${DOCKER_USER}/collectionbuilder
     ports:
       - 4000:4000
     depends_on:

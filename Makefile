@@ -7,4 +7,4 @@ build-docker-image:
 	default
 
 run-docker-image:
-	@docker-compose run default
+	@DOCKER_USER=`id -un` docker-compose run default
