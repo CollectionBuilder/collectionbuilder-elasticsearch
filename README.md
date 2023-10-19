@@ -1,5 +1,9 @@
 # CollectionBuilder-Elasticsearch
 
+*This proof of concept project is not currently actively maintained!*
+The repository represents a potential workflow to enhance a collectionbuilder collection with an Elasticsearch instance, however dependencies have not be updated. 
+Please consider this a basic outline model only, and update all dependencies before use!
+
 CollectionBuilder-Elasticsearch is a web application generator and toolset for configuring, administering, and searching collection data using Elasticsearch.
 
 ## Set Up Your Development Environment
